@@ -3,8 +3,9 @@
 Tool di conversione delle mod Java per Starling, eseguito **offline** (mai durante
 il gameplay). Produce un dizionario di vocabolario (`mapping.bin`) e un log
 (`conversion_log.json`) a partire dalle **sole firme** dei metodi, con l'aiuto
-facoltativo di un modello linguistico locale (**SmolLM2 360M**, GGUF Q4_K_M, via
-llama.cpp).
+facoltativo di un modello linguistico locale (**SmolLM2 360M**, GGUF Q4_K_M)
+esposto da un **server HTTP OpenAI-compatible** in ascolto su `127.0.0.1`
+(`llama-server`, LM Studio, Ollama, ...). Niente FFI né compilazione C++.
 
 ## Vincoli (fondamentali)
 
@@ -28,9 +29,9 @@ JAR della mod
    │  mod-converter::convert_signatures
    │    ├─ libreria mapping.bin esistente?  → usa quell'azione (source=library)
    │    └─ altrimenti → LocalAiEngine.translate(firma)
-   │         ├─ Ready    → SmolLM2 → azione (source=smollm2)
+   │         ├─ Ready    → server locale → azione (source=smollm2)
    │         ├─ Disarmed → scarta, "AI disattivata" (source=disabled)
-   │         └─ NotReady/timeout → scarta (source=fallback)
+   │         └─ NotReady/timeout/errore HTTP → scarta (source=fallback)
    ▼
 ConversionReport
    ├─ bridge_u8::mapping::write_mapping → mapping.bin   (wire_id u16 → action_id u16)
@@ -45,18 +46,36 @@ ConversionReport
 - Output: `JavaMethodSignature`. Nessun bytecode viene conservato.
 
 ### `local-ai`
-- `AiBackend` (trait) + `LlamaCppBackend` (wrapper llama.cpp). Il punto di
-  inserimento del runtime reale (`llama_model_load` / `llama_infer`) è in
-  `backend.rs`; nella v0 l'inferenza è un placeholder che ritorna errore, così
-  l'orchestrazione è testabile senza il runtime.
+- `AiBackend` (trait) + **`HttpAiBackend`**: client HTTP verso un server
+  OpenAI-compatible locale. Il modello gira in un **processo separato**; il
+  crate non carica pesi né compila C++.
+- **Endpoint predefinito**:
+  `http://127.0.0.1:8080/v1/chat/completions` (`DEFAULT_ENDPOINT`),
+  sovrascrivibile via `LocalAiConfig::endpoint` (preferenza Android
+  `ai_locale_endpoint`).
+- **Health check** (`load` / `arm`): connessione TCP all'host/porta
+  dell'endpoint con timeout di 2 s. Se il server non risponde lo stato resta
+  `NotReady`.
+- **Prompt** inviato a SmolLM2:
+  `"Sei un traduttore. Data questa firma: <firma>. Rispondi solo con l'azione
+  nativa tra [NativeTick, NativeHud, NativeKey, PlaySound, SetBlock]. Se non
+  sei sicuro, rispondi NONE."`
+- **Richiesta**: `POST` JSON con `messages[0].content` = prompt,
+  `temperature: 0`, `max_tokens: 16`, `stream: false`.
+- **Risposta**: si estrae `choices[0].message.content`; il testo viene parsato
+  in modo tollerante (case-insensitive, backtick/asterischi/spazi).
+  Azione valida ⇒ `Some(NativeAction)`; `NONE`, testo sconosciuto, risposta
+  malformata, errore HTTP o timeout ⇒ `Ok(None)` (fallback).
+- **Timeout**: 5 s per richiesta (`INFERENCE_TIMEOUT_SECS`), 2 s per la
+  connessione (`CONNECT_TIMEOUT_SECS`). Anche `LocalAiEngine` applica il proprio
+  `config.timeout_ms` (default 5000).
 - `LocalAiEngine`:
   - `translate_fragment(firma) -> Option<NativeAction>` (API richiesta);
   - `translate(firma) -> TranslationOutcome { native_action, source, took_ms }`;
   - `translate_in_background(firma) -> JoinHandle<TranslationOutcome>` (thread
     separato, la UI non blocca il gameplay);
-  - `arm()` / `disarm()` (toggle), `state()`, `is_available()`;
-  - timeout (`config.timeout_ms`): se superato ⇒ fallback.
-- Stati: `Ready` (modello caricato), `NotReady` (modello assente/non caricato),
+  - `arm()` / `disarm()` (toggle), `state()`, `is_available()`.
+- Stati: `Ready` (server raggiungibile), `NotReady` (server assente/non pronto),
   `Disarmed` (spento dall'utente). **Se `Disarmed` o `NotReady`, l'AI non viene
   mai interrogata.**
 
@@ -79,14 +98,58 @@ ConversionReport
 
 Il toggle è persistito in `SharedPreferences` (`starling_settings`,
 chiave `ai_locale_conversione_mod`, default **false** per privacy).
+L'endpoint è nella chiave `ai_locale_endpoint` (default
+`http://127.0.0.1:8080/v1/chat/completions`).
+
+## Server AI locale (OpenAI-compatible)
+
+Il modello **non** viene caricato nell'app: gira in un processo separato che
+espone `POST /v1/chat/completions`. Endpoint predefinito:
+`http://127.0.0.1:8080/v1/chat/completions`.
+
+### llama.cpp (`llama-server`)
+
+```bash
+llama-server -m smollm2-360m-instruct-q4_k_m.gguf \
+  --host 127.0.0.1 --port 8080 -c 512
+```
+
+### Ollama
+
+```bash
+ollama serve
+ollama pull smollm2:360m
+# endpoint: http://127.0.0.1:11434/v1/chat/completions   modello: smollm2:360m
+```
+
+### LM Studio
+
+Attivare **Local Server** (porta 1234 di default):
+`http://127.0.0.1:1234/v1/chat/completions`, modello = quello caricato.
+
+### Verifica rapida
+
+```bash
+curl -s http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"smollm2-360m","messages":[{"role":"user","content":"Rispondi solo con NativeTick"}],"max_tokens":8}'
+```
+
+Su Android l'endpoint si cambia con la preferenza `ai_locale_endpoint`. Per usare
+un server in esecuzione sul PC: `adb reverse tcp:8080 tcp:8080` (il `127.0.0.1`
+del dispositivo inoltra alla porta del PC).
+
+> **Android 9+**: il traffico `http://` in chiaro verso `127.0.0.1` richiede
+> `usesCleartextTraffic` o una network security config dedicata (vedi
+> `docs/ANDROID.md`, sezione 7).
 
 ## UI Kotlin
 
 `starling/SettingsScreen.kt` (`SettingsActivity`), stile View programmatico come
 `FriendsScreen.kt` (niente Compose):
 - `Switch` **"AI Locale per Conversione Mod"** → `AiConverterBridge.setAiEnabled`;
-- status testuale che descrive lo stato (`ready` / `not_ready` / `disarmed`) e la
-  presenza del modello;
+- status testuale che descrive lo stato (`ready` / `not_ready` / `disarmed`) e
+  l'endpoint del server locale;
 - campo "Percorso del file .jar" + pulsante **Converti** → `convertJar`, mostra il
   riepilogo e il percorso di output.
 
@@ -98,7 +161,7 @@ registry di handle opachi (`Mutex<HashMap<i64, ConverterHandle>>`), macro
 `guarded!` con `catch_unwind`, nessun puntatore raw attraverso JNI.
 
 Classe Java `dev.starling.converter.AiConverterBridge`:
-- `nativeCreate(modelPath, libraryPath) -> long` (AI parte disattivata);
+- `nativeCreate(endpoint, libraryPath) -> long` (AI parte disattivata);
 - `nativeSetAiEnabled(handle, enabled) -> String` (stato risultante);
 - `nativeAiState(handle) -> String`;
 - `nativeTranslateFragment(handle, firma) -> int` (action_id o -1);
@@ -140,26 +203,37 @@ Contiene **solo** firme, ID e nomi di azioni: nessun bytecode.
 ## Build & test
 
 ```bash
+# Tutti i test: logica pura, trasporto HTTP mock e mini-server TCP reale.
+# Nessuna compilazione C++/llama.cpp richiesta.
 CC=/usr/bin/gcc ~/.cargo/bin/cargo test -p mod-analyzer -p local-ai -p mod-converter
+
 bash java/ai-converter/build.sh     # build Rust JNI + 18 test JNI end-to-end
 ```
+
+Build Android (NDK): vedi [`docs/ANDROID.md`](ANDROID.md#7-ai-locale-server-http-locale).
 
 Copertura:
 - **mod-analyzer** (5): estrazione firme, JAR senza classi, JAR malformato,
   entry deflate, errori display.
-- **local-ai** (17): load/assente, arm/disarm, AI non interrogata se disattivata
-  o not-ready, traduzione, fallback, timeout, background, `translate_fragment`.
+- **local-ai** (31): prompt e parsing (`NONE`, case-insensitive, azioni valide),
+  body JSON, estrazione `choices[0].message.content`, health check, trasporto
+  mock (risposta valida/`NONE`/errore rete/HTTP/timeout), mini-server TCP reale
+  end-to-end, porta chiusa ⇒ fallback senza panic; engine: arm/disarm, AI non
+  interrogata se disattivata o not-ready, traduzione, fallback, timeout,
+  background, `translate_fragment`.
 - **mod-converter** (10): wire_id deterministico, AI attiva/disattivata,
-  precedenza libreria, modello assente, roundtrip `mapping.bin` con `bridge-u8`,
+  precedenza libreria, server assente, roundtrip `mapping.bin` con `bridge-u8`,
   struttura log, firme duplicate, zero codice copiato, pipeline su file.
-- **JNI** (18): default disarmed, toggle, fallback modello assente/presente,
-  conversione con AI spenta (`mapping.bin` magic `BU8M`, log "AI disattivata",
-  nessun bytecode), chiusura.
+- **JNI** (18): default disarmed, toggle, fallback server assente/non
+  raggiungibile, conversione con AI spenta (`mapping.bin` magic `BU8M`, log
+  "AI disattivata", nessun bytecode), chiusura.
 
 ## Stato attuale / prossimo passo
 
-Il runtime llama.cpp **non è ancora collegato**: `LlamaCppBackend.translate_fragment`
-è un placeholder che ritorna errore di inferenza, quindi con modello presente lo
-stato è `Ready` ma la traduzione va in fallback. L'orchestrazione (toggle,
-timeout, libreria, artefatti, JNI, UI) è completa e testata. Prossimo milestone:
-integrare il runtime llama.cpp reale e il download guidato del modello SmolLM2.
+Il backend AI è un **client HTTP** verso un server OpenAI-compatible locale:
+health check TCP, `POST /v1/chat/completions` con prompt SmolLM2, parsing di
+`choices[0].message.content`, timeout di 5 s (2 s per la connessione) e fallback
+`Ok(None)` su qualsiasi errore. Niente FFI, niente compilazione C++: il modello
+vive in un processo separato. Prossimo milestone: campo endpoint nella UI
+(oggi si imposta via `SharedPreferences`/`adb`), wizard di avvio del server e
+download guidato del modello SmolLM2.

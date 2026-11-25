@@ -17,15 +17,17 @@ package dev.starling.converter;
  *
  * <p>Logica del toggle:
  * <ul>
- *   <li>ATTIVO: SmolLM2 traduce le API sconosciute e aggiorna {@code mapping.bin};</li>
+ *   <li>ATTIVO: il server AI locale (SmolLM2 via HTTP, OpenAI-compatible)
+ *       traduce le API sconosciute e aggiorna {@code mapping.bin};</li>
  *   <li>DISATTIVO: si usa solo la libreria esistente, le API sconosciute sono
  *       scartate e loggate come "AI disattivata";</li>
- *   <li>modello assente o timeout ⇒ fallback, come se il toggle fosse spento.</li>
+ *   <li>server non raggiungibile o timeout ⇒ fallback, come se il toggle fosse
+ *       spento.</li>
  * </ul>
  *
  * <p>Uso tipico nella schermata Impostazioni:
  * <pre>
- *   AiConverterBridge conv = new AiConverterBridge(modelPath, libraryPath);
+ *   AiConverterBridge conv = new AiConverterBridge(endpoint, libraryPath);
  *   String state = conv.setAiEnabled(true);   // "ready" / "not_ready"
  *   String summary = conv.convertJar(jarPath, outDir);
  *   conv.close();
@@ -41,17 +43,19 @@ public final class AiConverterBridge implements AutoCloseable {
     /**
      * Crea un convertitore. L'AI parte disattivata (default privacy).
      *
-     * @param modelPath   percorso del modello SmolLM2 GGUF; vuoto = assente (fallback)
+     * @param endpoint    URL del server AI locale OpenAI-compatible
+     *                    (es. {@code http://127.0.0.1:8080/v1/chat/completions});
+     *                    vuoto o non-URL = endpoint predefinito
      * @param libraryPath percorso del {@code mapping.bin} esistente; vuoto = nessuna libreria
      */
-    public AiConverterBridge(String modelPath, String libraryPath) {
-        if (modelPath == null) {
-            modelPath = "";
+    public AiConverterBridge(String endpoint, String libraryPath) {
+        if (endpoint == null) {
+            endpoint = "";
         }
         if (libraryPath == null) {
             libraryPath = "";
         }
-        this.handle = nativeCreate(modelPath, libraryPath);
+        this.handle = nativeCreate(endpoint, libraryPath);
         if (this.handle == 0) {
             throw new IllegalStateException("impossibile creare il convertitore");
         }
@@ -111,7 +115,7 @@ public final class AiConverterBridge implements AutoCloseable {
 
     // --- Native ------------------------------------------------------------
 
-    private static native long nativeCreate(String modelPath, String libraryPath);
+    private static native long nativeCreate(String endpoint, String libraryPath);
 
     private static native String nativeSetAiEnabled(long handle, boolean enabled);
 

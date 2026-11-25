@@ -389,7 +389,7 @@ mod tests {
 
     fn config() -> LocalAiConfig {
         LocalAiConfig {
-            model_path: PathBuf::from("/inesistente.gguf"),
+            endpoint: "http://127.0.0.1:1/v1/chat/completions".to_string(),
             n_ctx: 512,
             timeout_ms: 2000,
         }

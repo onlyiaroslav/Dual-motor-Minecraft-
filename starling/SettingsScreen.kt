@@ -18,11 +18,11 @@ import java.io.File
  * Schermata "Impostazioni" del launcher Starling (Fase 7).
  *
  * Espone l'interruttore **"AI Locale per Conversione Mod"**:
- *  - ATTIVO: il tool usa SmolLM2 (llama.cpp, GGUF Q4_K_M) per tradurre le API
- *    sconosciute e aggiorna `mapping.bin`;
+ *  - ATTIVO: il server AI locale (SmolLM2 via HTTP, API OpenAI-compatible)
+ *    traduce le API sconosciute e aggiorna `mapping.bin`;
  *  - DISATTIVO: il tool non usa l'AI, si limita alla libreria esistente
  *    (`mapping.bin`) e scarta le API sconosciute loggando "AI disattivata";
- *  - modello non scaricato o timeout ⇒ fallback, come se fosse disattivato.
+ *  - server non raggiungibile o timeout ⇒ fallback, come se fosse disattivato.
  *
  * Privacy (zero codice copiato): la conversione produce solo il dizionario
  * `mapping.bin` e il log `conversion_log.json`. Nessun bytecode o asset viene
@@ -33,15 +33,18 @@ import java.io.File
  * Packaging Android: includere `libmod_converter.so` in
  * `src/main/jniLibs/arm64-v8a/` (prodotta da
  * `cargo ndk ... build -p mod-converter --features jni`) e la classe
- * `dev.starling.converter.AiConverterBridge` nell'APK. Il modello SmolLM2 va
- * scaricato manualmente in `models/smollm2-360m-q4_k_m.gguf` (files dir).
+ * `dev.starling.converter.AiConverterBridge` nell'APK. Il modello SmolLM2 gira
+ * in un server OpenAI-compatible locale (es. `llama-server`) su
+ * `http://127.0.0.1:8080`; l'endpoint è sovrascrivibile con la preferenza
+ * `ai_locale_endpoint`.
  */
 class SettingsActivity : ComponentActivity() {
 
     companion object {
         private const val PREFS = "starling_settings"
         private const val KEY_AI_MOD = "ai_locale_conversione_mod"
-        private const val MODEL_REL = "models/smollm2-360m-q4_k_m.gguf"
+        private const val KEY_AI_ENDPOINT = "ai_locale_endpoint"
+        private const val DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
         private const val LIBRARY_REL = "mapping.bin"
         private const val OUT_REL = "conversion"
     }
@@ -52,7 +55,7 @@ class SettingsActivity : ComponentActivity() {
     private lateinit var jarInput: EditText
     private lateinit var resultView: TextView
 
-    private lateinit var modelFile: File
+    private var endpoint: String = DEFAULT_ENDPOINT
     private lateinit var libraryFile: File
     private lateinit var outDir: File
 
@@ -60,16 +63,16 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val base = getExternalFilesDir(null)
-        modelFile = File(base, MODEL_REL)
         libraryFile = File(base, LIBRARY_REL)
         outDir = File(base, OUT_REL)
 
         // L'AI parte in base alla preferenza salvata (default: disattivata).
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val aiEnabled = prefs.getBoolean(KEY_AI_MOD, false)
+        endpoint = prefs.getString(KEY_AI_ENDPOINT, DEFAULT_ENDPOINT) ?: DEFAULT_ENDPOINT
 
         converter = AiConverterBridge(
-            if (modelFile.exists()) modelFile.absolutePath else "",
+            endpoint,
             if (libraryFile.exists()) libraryFile.absolutePath else ""
         )
 
@@ -112,9 +115,10 @@ class SettingsActivity : ComponentActivity() {
         root.addView(statusView)
 
         root.addView(TextView(this).apply {
-            text = "Se attiva, SmolLM2 traduce le API sconosciute e aggiorna mapping.bin. " +
-                "Se disattivata, si usa solo la libreria esistente e le API sconosciute " +
-                "vengono scartate (log: \"AI disattivata\"). Modello assente o timeout ⇒ fallback. " +
+            text = "Se attiva, il server AI locale (SmolLM2 via HTTP) traduce le API " +
+                "sconosciute e aggiorna mapping.bin. Se disattivata, si usa solo la " +
+                "libreria esistente e le API sconosciute vengono scartate " +
+                "(log: \"AI disattivata\"). Server non raggiungibile o timeout ⇒ fallback. " +
                 "Nessun codice o asset viene copiato o inviato: tutto resta sul dispositivo."
             textSize = 12f
             setTextColor(Color.GRAY)
@@ -169,10 +173,9 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun describeState(state: String): String {
-        val model = if (modelFile.exists()) "modello presente" else "modello non scaricato"
         return when (state) {
-            "ready" -> "AI attiva e pronta ($model)."
-            "not_ready" -> "AI attiva ma non pronta ($model): fallback senza AI."
+            "ready" -> "AI attiva e pronta (server locale: $endpoint)."
+            "not_ready" -> "AI attiva ma server non raggiungibile ($endpoint): fallback senza AI."
             "disarmed" -> "AI disattivata: conversione con sola libreria mapping.bin."
             else -> "Stato AI: $state"
         }

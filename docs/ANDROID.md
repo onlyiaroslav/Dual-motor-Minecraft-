@@ -159,3 +159,118 @@ CC=/usr/bin/gcc cargo test --workspace
 Nota ambiente: se il `java` nel PATH è una JVM bionic (Termux), i test JNI
 vanno eseguiti con una JVM glibc (es. `/usr/lib/jvm/java-21-openjdk-arm64/bin/java`):
 lo script lo seleziona automaticamente.
+
+## 7. AI locale (server HTTP locale)
+
+La conversione offline (Fase 7) **non** compila llama.cpp e **non** carica pesi
+nel processo dell'app: `local-ai` è un client HTTP verso un server
+OpenAI-compatible in ascolto su `127.0.0.1`. Questo elimina del tutto i
+problemi di toolchain C++/glibc/bionic.
+
+- Endpoint predefinito: `http://127.0.0.1:8080/v1/chat/completions`.
+- Preferenza Android: `starling_settings` → `ai_locale_endpoint`.
+- Nessuna feature Rust da attivare: `reqwest` con `rustls-tls` (ring) compila
+  per `aarch64-linux-android` senza cmake, bindgen o NDK C++.
+
+### 7.1 Opzione A — server sul dispositivo (Termux + llama.cpp)
+
+```bash
+pkg install llama-cpp
+# scarica il modello SmolLM2 360M Q4_K_M (~250 MB) e avvia il server
+llama-server -m ~/smollm2-360m-instruct-q4_k_m.gguf \
+  --host 127.0.0.1 --port 8080 -c 512
+```
+
+L'app si collega a `127.0.0.1:8080`. Requisiti indicativi: ~250 MB su disco e
+~400–500 MB di RAM durante l'inferenza.
+
+### 7.2 Opzione B — server sul PC + `adb reverse`
+
+```bash
+# sul PC
+llama-server -m smollm2-360m-instruct-q4_k_m.gguf --host 127.0.0.1 --port 8080 -c 512
+# dalla macchina collegata via USB
+adb reverse tcp:8080 tcp:8080
+```
+
+`adb reverse` rende il `127.0.0.1:8080` del dispositivo un tunnel verso il PC.
+Nessun traffico esce dalla rete locale.
+
+### 7.3 Altri server compatibili
+
+| Server | Endpoint | Modello |
+|---|---|---|
+| `llama-server` | `http://127.0.0.1:8080/v1/chat/completions` | quello caricato |
+| Ollama | `http://127.0.0.1:11434/v1/chat/completions` | `smollm2:360m` |
+| LM Studio | `http://127.0.0.1:1234/v1/chat/completions` | quello caricato |
+| text-generation-webui | `http://127.0.0.1:5000/v1/chat/completions` | quello caricato |
+
+L'endpoint si imposta con la preferenza `ai_locale_endpoint` (in futuro un
+campo dedicato nella schermata Impostazioni); oggi si può scrivere via `adb`:
+
+```bash
+adb shell run-as <package> \
+  sed -i 's#http://127.0.0.1:8080#http://127.0.0.1:11434#' \
+  shared_prefs/starling_settings.xml
+```
+
+### 7.4 Manifest e traffico in chiaro (Android 9+)
+
+L'endpoint è `http://`, quindi servono:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+e, in `res/xml/network_security_config.xml`:
+
+```xml
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">127.0.0.1</domain>
+    <domain includeSubdomains="false">localhost</domain>
+  </domain-config>
+</network-security-config>
+```
+
+riferito dall'`application`:
+
+```xml
+<application android:networkSecurityConfig="@xml/network_security_config" ...>
+```
+
+Senza questa configurazione Android blocca le richieste `http://` e il backend
+va in fallback (`not_ready`).
+
+### 7.5 Build Android
+
+```bash
+export ANDROID_NDK_HOME="$HOME/Android/Sdk/ndk/27.2.12479018"
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+
+cargo ndk -t arm64-v8a -o app/src/main/jniLibs build --release \
+  -p mod-converter --features jni
+# → app/src/main/jniLibs/arm64-v8a/libmod_converter.so
+```
+
+Nessuna feature AI da aggiungere: il client HTTP è sempre compilato. `ring`
+(usato da rustls) compila assembly/C per Android senza cmake.
+
+### 7.6 Test
+
+```bash
+cargo test -p local-ai                  # 31 test: mock HTTP + mini-server TCP
+bash java/ai-converter/build.sh         # 18 test JNI (fallback server assente)
+```
+
+### 7.7 Troubleshooting
+
+| Sintomo | Causa / rimedio |
+|---|---|
+| `not_ready` con server attivo | endpoint errato, `adb reverse` assente, firewall |
+| `fallback` su ogni firma | server risponde ma con percorso diverso da `/v1/chat/completions` |
+| `Cleartext HTTP traffic not permitted` | aggiungere la network security config (7.4) |
+| timeout dopo 5 s | modello troppo grande / CPU lenta: usare SmolLM2 360M o alzare `timeout_ms` |
+| `Connection refused` | server non avviato o porta diversa |
+| risposta sempre `NONE` | prompt/modello inadeguato: verificare con `curl` |

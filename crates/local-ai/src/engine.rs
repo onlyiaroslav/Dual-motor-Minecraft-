@@ -10,20 +10,21 @@
 //!   fosse disattivato ([`TranslationSource::Fallback`]).
 
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-use crate::backend::{AiBackend, AiBackendError, LlamaCppBackend};
+use crate::backend::{AiBackend, AiBackendError, HttpAiBackend, DEFAULT_ENDPOINT};
 use bridge_u8::NativeAction;
 
 /// Configurazione del motore AI locale.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalAiConfig {
-    /// Percorso del modello GGUF (SmolLM2 Q4_K_M).
-    pub model_path: PathBuf,
-    /// Contesto del modello (token).
+    /// Endpoint OpenAI-compatible del server locale
+    /// (default: [`DEFAULT_ENDPOINT`]).
+    pub endpoint: String,
+    /// Contesto del modello (token). Informativo: il server usa la propria
+    /// configurazione; il valore è mantenuto per compatibilità e diagnostica.
     pub n_ctx: u32,
     /// Timeout in ms per singola inferenza.
     pub timeout_ms: u64,
@@ -32,9 +33,9 @@ pub struct LocalAiConfig {
 impl Default for LocalAiConfig {
     fn default() -> Self {
         Self {
-            model_path: PathBuf::from("models/smollm2-360m-q4_k_m.gguf"),
+            endpoint: DEFAULT_ENDPOINT.to_string(),
             n_ctx: 512,
-            timeout_ms: 2000,
+            timeout_ms: 5000,
         }
     }
 }
@@ -42,9 +43,9 @@ impl Default for LocalAiConfig {
 /// Stato del motore AI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineState {
-    /// AI abilitata e modello caricato.
+    /// AI abilitata e server locale raggiungibile.
     Ready,
-    /// AI abilitata ma modello assente / non caricato.
+    /// AI abilitata ma server locale assente / non pronto.
     NotReady,
     /// AI disattivata dall'utente (fallback senza AI).
     Disarmed,
@@ -111,19 +112,15 @@ pub struct LocalAiEngine {
 }
 
 impl LocalAiEngine {
-    /// Crea un motore con backend llama.cpp reale. Lo stato iniziale è
-    /// `Ready` solo se il file del modello è già presente sul dispositivo.
+    /// Crea un motore con backend HTTP reale. Lo stato iniziale è `NotReady`:
+    /// `arm()` esegue l'health check del server locale e imposta `Ready` se
+    /// raggiungibile.
     pub fn new(config: LocalAiConfig) -> Self {
-        let model_path = config.model_path.clone();
-        let state = if model_path.exists() {
-            EngineState::Ready
-        } else {
-            EngineState::NotReady
-        };
+        let endpoint = config.endpoint.clone();
         Self {
             config,
-            state: Arc::new(Mutex::new(state)),
-            backend: Arc::new(Mutex::new(LlamaCppBackend::new(model_path))),
+            state: Arc::new(Mutex::new(EngineState::NotReady)),
+            backend: Arc::new(Mutex::new(HttpAiBackend::new(endpoint))),
         }
     }
 
@@ -291,7 +288,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    /// Backend fittizio per testare l'orchestrazione senza llama.cpp.
+    /// Backend fittizio per testare l'orchestrazione senza server HTTP.
     struct MockBackend {
         load_ok: bool,
         action: Option<NativeAction>,
@@ -337,7 +334,7 @@ mod tests {
 
     fn config() -> LocalAiConfig {
         LocalAiConfig {
-            model_path: PathBuf::from("/percorso/inesistente/model.gguf"),
+            endpoint: "http://127.0.0.1:1/v1/chat/completions".to_string(),
             n_ctx: 512,
             timeout_ms: 2000,
         }
@@ -350,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn new_modello_assente_e_not_ready() {
+    fn new_parte_not_ready() {
         let engine = LocalAiEngine::new(config());
         assert_eq!(engine.state(), EngineState::NotReady);
         assert!(!engine.is_available());

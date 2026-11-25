@@ -14,7 +14,7 @@ crates/bridge-jni/    # Trasporto in-process: JNI + ring buffer SPSC condiviso
 crates/starling-features/  # Feature client: X-Ray, greedy meshing, bake, foglie
 crates/starling-social/    # Fase 6: amici, token monouso (OsRng), auth offline, LAN/P2P
 crates/mod-analyzer/       # Fase 7: parser JAR/class → sole firme dei metodi (zero bytecode)
-crates/local-ai/           # Fase 7: motore SmolLM2/llama.cpp, toggle, timeout, fallback
+crates/local-ai/           # Fase 7: client HTTP SmolLM2, toggle, timeout, fallback
 crates/mod-converter/      # Fase 7: orchestrazione → mapping.bin + conversion_log.json
 java/bridge-u8/       # Lato Java: LUT, U8Bridge, RingBuffer, host headless,
                       #   lettore manifest reali (Fabric/NeoForge/Forge)
@@ -129,30 +129,51 @@ Tool **offline** di conversione mod, puramente additivo: non tocca `bridge-u8`,
 - **`mod-analyzer`**: parser JAR (ZIP) + class file JVM che estrae **solo le
   firme** dei metodi (`classe`, `nome`, `descriptor`). Nessun bytecode, nessuna
   decompilazione, nessun asset. Gestisce entry stored e deflate.
-- **`local-ai`** (`LocalAiEngine`): wrapper llama.cpp per **SmolLM2 360M GGUF
-  Q4_K_M**. Espone `translate_fragment(firma) -> Option<NativeAction>`, gira su
-  thread separato (`translate_in_background`), con timeout e fallback. Stati:
-  `Ready` / `NotReady` / `Disarmed`.
+- **`local-ai`** (`LocalAiEngine` + `HttpAiBackend`): client **HTTP** verso un
+  server OpenAI-compatible locale (default
+  `http://127.0.0.1:8080/v1/chat/completions`; `llama-server`, LM Studio,
+  Ollama…). Nessun FFI/compilazione C++: il modello (SmolLM2 360M GGUF Q4_K_M)
+  gira in un processo separato. Espone
+  `translate_fragment(firma) -> Option<NativeAction>`, formatta il prompt
+  (risposta vincolata a `NativeTick`, `NativeHud`, `NativeKey`, `PlaySound`,
+  `SetBlock` o `NONE`), estrae `choices[0].message.content`, gira su thread
+  separato (`translate_in_background`) con **timeout di 5 s** e fallback.
+  Stati: `Ready` / `NotReady` / `Disarmed`; se il server non risponde la
+  traduzione restituisce `None` (fallback), mai un panic.
 - **`mod-converter`**: orchestra parser + AI e produce due artefatti:
   - `mapping.bin`: dizionario di vocabolario nel formato LUT `bridge-u8`
     (`wire_id u16 → action_id u16`), ricaricabile dal motore;
   - `conversion_log.json`: registro delle decisioni per ogni firma.
 - **Toggle "AI Locale per Conversione Mod"** (`starling/SettingsScreen.kt`):
-  - **ATTIVO**: SmolLM2 traduce le API sconosciute e aggiorna `mapping.bin`;
+  - **ATTIVO**: il server AI locale traduce le API sconosciute e aggiorna
+    `mapping.bin`;
   - **DISATTIVO**: si usa solo la libreria esistente, le API sconosciute sono
     scartate e loggate come `"AI disattivata"`;
-  - **modello assente o timeout** ⇒ fallback, come se il toggle fosse spento.
+  - **server non raggiungibile o timeout** ⇒ fallback, come se il toggle fosse
+    spento.
 - **JNI** (`--features jni`): `libmod_converter.so` separata; la classe
   `java/ai-converter/.../AiConverterBridge.java` espone toggle, stato e
   conversione alla UI Kotlin.
 
+**Server AI locale** (fuori dall'app, tutto in locale):
+
+```bash
+llama-server -m smollm2-360m-instruct-q4_k_m.gguf \
+  --host 127.0.0.1 --port 8080 -c 512
+# su Android con server sul PC:
+adb reverse tcp:8080 tcp:8080
+```
+
+Dettagli e alternativa (Ollama/LM Studio) in `docs/CONVERSION.md`.
+
 **Vincoli legali**: zero codice copiato (solo firme + ID numerici + nomi azione),
 nessun upload per mod "All Rights Reserved": tutto resta sul dispositivo.
 
-Test: parser (stored/deflate/malformato), motore (toggle, fallback, timeout,
-background, AI non interrogata se disattivata), convertitore (mapping roundtrip
-con `bridge-u8`, log "AI disattivata", precedenza libreria, zero bytecode), e
-18 test JNI end-to-end.
+Test: parser (stored/deflate/malformato), motore (prompt/parsing, toggle,
+fallback, timeout, background, AI non interrogata se disattivata), trasporto
+HTTP (mock + mini-server TCP reale, porta chiusa ⇒ fallback senza panic),
+convertitore (mapping roundtrip con `bridge-u8`, log "AI disattivata", precedenza
+libreria, zero bytecode), e 18 test JNI end-to-end.
 
 ## Comandi
 
@@ -178,9 +199,9 @@ Android: vedi `docs/ANDROID.md` e `docs/STARLING_INTEGRATION.md`
   mini-server auth TCP ✅, LAN ✅, UI Amici ✅; P2P (iroh/libp2p) pianificato
   dietro il trait `P2pTunnel`.
 - **Fase 7 — Conversione offline con AI locale**: parser JAR (sole firme) ✅,
-  `LocalAiEngine` SmolLM2/llama.cpp ✅, toggle UI ✅, `mapping.bin` +
-  `conversion_log.json` ✅, JNI ✅; prossimo: collegamento del runtime
-  llama.cpp reale (oggi placeholder di inferenza) e download guidato del modello.
+  `LocalAiEngine` + backend HTTP OpenAI-compatible ✅, toggle UI ✅,
+  `mapping.bin` + `conversion_log.json` ✅, JNI ✅; prossimo: campo endpoint
+  nella UI, wizard di avvio del server e download guidato del modello.
 - **Fase 2 — PC (Horizon)**: backend wgpu (DX12 + fallback Vulkan), hook
   Java → `horizon-mod-api` (`native_tick`, `native_hud`, `native_key`).
 - **Fase 3**: sandbox mod nuove prima dell'ingresso in LUT; desync check

@@ -104,19 +104,21 @@ fn state_str(state: EngineState) -> &'static str {
 
 // --- Export ---------------------------------------------------------------
 
-/// Crea un convertitore. `modelPath` può essere vuoto (modello assente →
-/// fallback). `libraryPath` è il `mapping.bin` esistente (vuoto = nessuna
-/// libreria). L'AI parte **disattivata** (default privacy): la UI la attiva
-/// tramite `nativeSetAiEnabled` in base alla preferenza salvata.
+/// Crea un convertitore. `endpoint` è l'URL del server AI locale
+/// OpenAI-compatible (es. `http://127.0.0.1:8080/v1/chat/completions`);
+/// vuoto o non-URL = endpoint predefinito. `libraryPath` è il `mapping.bin`
+/// esistente (vuoto = nessuna libreria). L'AI parte **disattivata** (default
+/// privacy): la UI la attiva tramite `nativeSetAiEnabled` in base alla
+/// preferenza salvata.
 #[no_mangle]
 pub extern "system" fn Java_dev_starling_converter_AiConverterBridge_nativeCreate<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
-    model_path: JString<'local>,
+    endpoint: JString<'local>,
     library_path: JString<'local>,
 ) -> jlong {
     guarded!(env, 0, {
-        let model: String = match get_string(&mut env, &model_path) {
+        let endpoint: String = match get_string(&mut env, &endpoint) {
             Ok(s) => s,
             Err(e) => {
                 throw(&mut env, &e);
@@ -132,8 +134,9 @@ pub extern "system" fn Java_dev_starling_converter_AiConverterBridge_nativeCreat
         };
 
         let mut config = LocalAiConfig::default();
-        if !model.trim().is_empty() {
-            config.model_path = PathBuf::from(model);
+        let trimmed = endpoint.trim();
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            config.endpoint = trimmed.to_string();
         }
         let engine = LocalAiEngine::new(config);
         engine.disarm("default off");
@@ -172,7 +175,7 @@ pub extern "system" fn Java_dev_starling_converter_AiConverterBridge_nativeSetAi
     guarded!(env, std::ptr::null_mut(), {
         let state = match with_handle(handle, |h| {
             if enabled != 0 {
-                // arm() imposta Ready se il modello si carica, altrimenti NotReady.
+                // arm() imposta Ready se il server locale risponde, altrimenti NotReady.
                 let _ = h.engine.arm();
             } else {
                 h.engine.disarm("toggle off");

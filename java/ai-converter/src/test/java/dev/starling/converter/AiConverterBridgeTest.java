@@ -14,8 +14,9 @@ import java.util.zip.ZipOutputStream;
  * Richiede {@code libmod_converter.so} in {@code java.library.path}.
  *
  * <p>Verifica il toggle "AI Locale per Conversione Mod", il fallback quando il
- * modello è assente, e la generazione di {@code mapping.bin} +
- * {@code conversion_log.json} con il vincolo "zero codice copiato".
+ * server HTTP locale non è raggiungibile, e la generazione di
+ * {@code mapping.bin} + {@code conversion_log.json} con il vincolo
+ * "zero codice copiato".
  */
 public final class AiConverterBridgeTest {
     private static int passed;
@@ -24,8 +25,8 @@ public final class AiConverterBridgeTest {
     public static void main(String[] args) throws Exception {
         testCreateDefaultDisarmed();
         testToggleOffNonUsaAi();
-        testToggleOnModelloAssente();
-        testToggleOnModelloPresente();
+        testToggleOnServerAssente();
+        testToggleOnServerNonRaggiungibile();
         testConvertJarAiDisattivata();
         testConvertJarConLibreria();
         testChiusura();
@@ -89,12 +90,6 @@ public final class AiConverterBridgeTest {
         return jar;
     }
 
-    private static Path tempModel() throws IOException {
-        Path p = Files.createTempDirectory("starling-conv-model").resolve("model.gguf");
-        Files.write(p, new byte[]{'G', 'G', 'U', 'F'});
-        return p;
-    }
-
     // --- Test ---------------------------------------------------------------
 
     private static void testCreateDefaultDisarmed() {
@@ -114,27 +109,25 @@ public final class AiConverterBridgeTest {
         }
     }
 
-    private static void testToggleOnModelloAssente() {
-        System.out.println("testToggleOnModelloAssente");
+    private static void testToggleOnServerAssente() {
+        System.out.println("testToggleOnServerAssente");
         try (AiConverterBridge conv = new AiConverterBridge("", "")) {
             String state = conv.setAiEnabled(true);
-            check("not_ready".equals(state), "modello assente -> not_ready (fallback)");
+            check("not_ready".equals(state), "server assente -> not_ready (fallback)");
             check(conv.translateFragment("com.example.Test.a()V") == -1,
-                    "fallback: nessuna azione senza modello");
+                    "fallback: nessuna azione senza server");
         }
     }
 
-    private static void testToggleOnModelloPresente() throws Exception {
-        System.out.println("testToggleOnModelloPresente");
-        Path model = tempModel();
-        try (AiConverterBridge conv = new AiConverterBridge(model.toString(), "")) {
+    private static void testToggleOnServerNonRaggiungibile() {
+        System.out.println("testToggleOnServerNonRaggiungibile");
+        // Porta 1 su loopback: connessione rifiutata, nessun server in ascolto.
+        String endpoint = "http://127.0.0.1:1/v1/chat/completions";
+        try (AiConverterBridge conv = new AiConverterBridge(endpoint, "")) {
             String state = conv.setAiEnabled(true);
-            check("ready".equals(state), "modello presente -> ready");
-            // v0: runtime llama.cpp non collegato -> inferenza non disponibile -> fallback.
+            check("not_ready".equals(state), "server irraggiungibile -> not_ready");
             check(conv.translateFragment("com.example.Test.a()V") == -1,
-                    "ready ma inference placeholder -> fallback (-1)");
-        } finally {
-            Files.deleteIfExists(model);
+                    "server irraggiungibile -> fallback senza panic (-1)");
         }
     }
 
