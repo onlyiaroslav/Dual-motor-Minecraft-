@@ -1,0 +1,14 @@
+# Mirror USTC per crates.io (static.crates.io non raggiungibile da questo ambiente).
+[source.crates-io]
+replace-with = "ustc"
+
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+
+# Cross-compilazione Android ARM64 (Starling).
+# Richiede NDK r27+ con toolchain/bin nel PATH, oppure override via
+# CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/percorso/ndk/.../aarch64-linux-android24-clang
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android24-clang"
+# Android 15: supporto pagine da 16 KB richiesto sui device recenti.
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

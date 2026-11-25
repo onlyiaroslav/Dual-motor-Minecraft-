@@ -1,0 +1,9 @@
+[package]
+name = "mod-analyzer"
+version = "0.1.0"
+edition = "2021"
+description = "Analizzatore JAR di Starling: estrae SOLO le firme dei metodi (mapping offline)"
+license = "MIT"
+
+[dependencies]
+flate2 = "1"

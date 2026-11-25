@@ -1,0 +1,13 @@
+[package]
+name = "bridge-jni"
+version = "0.1.0"
+edition = "2021"
+description = "Trasporto in-process JNI + ring buffer condiviso per il bridge a 8 bit (Starling/Horizon)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bridge-u8 = { path = "../bridge-u8" }
+jni = { version = "0.21", default-features = false }

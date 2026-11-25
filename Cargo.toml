@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/bridge-u8", "crates/bridge-jni", "crates/starling-features", "crates/starling-social", "crates/mod-analyzer", "crates/local-ai", "crates/mod-converter"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

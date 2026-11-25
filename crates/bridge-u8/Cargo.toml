@@ -1,0 +1,9 @@
+[package]
+name = "bridge-u8"
+version = "0.1.0"
+edition = "2021"
+description = "Bridge IPC a 8 bit (LUT u16 -> azioni native) tra motore Rust Starling/Horizon e JVM headless per mod Java"
+license = "MIT"
+
+# Zero dipendenze: solo std, per cross-compilazione Android (NDK) senza attriti.
+[dependencies]

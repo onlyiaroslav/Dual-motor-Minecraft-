@@ -1,0 +1,23 @@
+[package]
+name = "starling-social"
+version = "0.1.0"
+edition = "2021"
+description = "Lista amici + join offline tramite codice monouso (TTL 5 min, OsRng), mini-server TCP separato dal bridge a 8 bit, LAN + trait P2P futuro"
+license = "MIT"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# Richiesto esplicitamente: generazione codici con rand::rngs::OsRng.
+rand = "0.8"
+jni = { version = "0.21", default-features = false, optional = true }
+
+[features]
+default = []
+# JNI per la schermata "Amici" del launcher Kotlin (layer aggiuntivo,
+# NON tocca il bridge-jni esistente).
+jni = ["dep:jni"]
+
+[dev-dependencies]
+starling-features = { path = "../starling-features" }

@@ -1,0 +1,21 @@
+[package]
+name = "mod-converter"
+version = "0.1.0"
+edition = "2021"
+description = "Convertitore offline di mod Starling: genera mapping.bin + conversion_log.json (zero codice copiato)"
+license = "MIT"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+mod-analyzer = { path = "../mod-analyzer" }
+local-ai = { path = "../local-ai" }
+bridge-u8 = { path = "../bridge-u8" }
+jni = { version = "0.21", default-features = false, optional = true }
+
+[features]
+default = []
+# JNI per la schermata Impostazioni del launcher Kotlin (layer aggiuntivo,
+# NON tocca bridge-jni né starling-social).
+jni = ["dep:jni"]

@@ -1,0 +1,25 @@
+# Rust build artifacts
+/target
+
+# Build artifacts (Java / C++ / nativi)
+build/
+java/*/build/
+*.class
+*.so
+*.o
+*.hprof
+
+# Gradle / Android
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
