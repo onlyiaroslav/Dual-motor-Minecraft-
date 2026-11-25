@@ -205,6 +205,10 @@ Nessun traffico esce dalla rete locale.
 | LM Studio | `http://127.0.0.1:1234/v1/chat/completions` | quello caricato |
 | text-generation-webui | `http://127.0.0.1:5000/v1/chat/completions` | quello caricato |
 
+> Il payload invia `model: smollm2-360m` (`DEFAULT_MODEL_NAME`). `llama-server`
+> lo ignora; con Ollama/LM Studio il nome deve combaciare con il modello
+> caricato (per Ollama: `smollm2:360m`).
+
 L'endpoint si imposta con la preferenza `ai_locale_endpoint` (in futuro un
 campo dedicato nella schermata Impostazioni); oggi si può scrivere via `adb`:
 

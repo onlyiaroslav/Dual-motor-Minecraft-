@@ -122,6 +122,11 @@ ollama pull smollm2:360m
 # endpoint: http://127.0.0.1:11434/v1/chat/completions   modello: smollm2:360m
 ```
 
+> Il payload invia `model: smollm2-360m` (`DEFAULT_MODEL_NAME`). Con Ollama il
+> nome deve combaciare (`smollm2:360m`): allineare la costante in
+> `crates/local-ai/src/backend.rs` oppure usare `llama-server`, che ignora il
+> campo `model`.
+
 ### LM Studio
 
 Attivare **Local Server** (porta 1234 di default):
