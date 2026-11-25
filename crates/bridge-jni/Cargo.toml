@@ -3,7 +3,8 @@ name = "bridge-jni"
 version = "0.1.0"
 edition = "2021"
 description = "Trasporto in-process JNI + ring buffer condiviso per il bridge a 8 bit (Starling/Horizon)"
-license = "MIT"
+license-file = "../../LICENSE"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]

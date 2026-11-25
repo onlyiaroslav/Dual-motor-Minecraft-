@@ -3,7 +3,8 @@ name = "mod-converter"
 version = "0.1.0"
 edition = "2021"
 description = "Convertitore offline di mod Starling: genera mapping.bin + conversion_log.json (zero codice copiato)"
-license = "MIT"
+license-file = "../../LICENSE"
+publish = false
 
 [lib]
 crate-type = ["rlib", "cdylib"]

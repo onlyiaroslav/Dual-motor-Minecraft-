@@ -3,6 +3,7 @@ name = "starling-features"
 version = "0.1.0"
 edition = "2021"
 description = "Feature client Starling: X-Ray toggle, greedy meshing, baking statico, foglie hollow — con integrità della logica di gioco garantita"
-license = "MIT"
+license-file = "../../LICENSE"
+publish = false
 
 [dependencies]

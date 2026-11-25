@@ -3,7 +3,8 @@ name = "local-ai"
 version = "0.1.0"
 edition = "2021"
 description = "Motore AI locale per la conversione offline dei mod (SmolLM2 via llama.cpp)"
-license = "MIT"
+license-file = "../../LICENSE"
+publish = false
 
 [dependencies]
 bridge-u8 = { path = "../bridge-u8" }

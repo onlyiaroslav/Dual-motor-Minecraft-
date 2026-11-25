@@ -193,3 +193,12 @@ Android: vedi `docs/ANDROID.md` e `docs/STARLING_INTEGRATION.md`
   linker, minSdk 33 per VarHandle (target 35).
 - Latenza: ~286 ns/pacchetto lato Rust; budget 5 ms/frame ampiamente rispettato.
 - Licenze: i jar originali vengono eseguiti, mai decompilati o riscritti.
+
+## Licenza
+
+**Proprietaria — All Rights Reserved.** Copyright (c) 2026 onlyiaroslav.
+Il codice originale del progetto non è riutilizzabile, copiabile o
+distribuibile senza permesso scritto esplicito. Vedi il file [`LICENSE`](LICENSE).
+I crate dichiarano `license-file = "../../LICENSE"` e `publish = false`
+(nessuna pubblicazione su crates.io). Le dipendenze di terze parti e i file
+originali di gioco/mod restano soggetti alle rispettive licenze.

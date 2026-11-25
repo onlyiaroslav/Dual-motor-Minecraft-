@@ -3,7 +3,8 @@ name = "starling-social"
 version = "0.1.0"
 edition = "2021"
 description = "Lista amici + join offline tramite codice monouso (TTL 5 min, OsRng), mini-server TCP separato dal bridge a 8 bit, LAN + trait P2P futuro"
-license = "MIT"
+license-file = "../../LICENSE"
+publish = false
 
 [lib]
 crate-type = ["rlib", "cdylib"]
