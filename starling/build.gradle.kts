@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose") // Nuovo plugin per Kotlin 2.0
 }
 
 android {
@@ -31,9 +32,7 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
-    }
+    // NOTA: Il blocco composeOptions è stato rimosso (non serve più con Kotlin 2.0)
 }
 
 dependencies {
