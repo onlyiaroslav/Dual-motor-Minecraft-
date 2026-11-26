@@ -20,14 +20,18 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK, NDK and CMake
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platforms;android-35
-            build-tools;35.0.0
-            ndk;27.0.12077973
-            cmake;3.22.1
+          packages: ''
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.0.12077973" \
+            "cmake;3.22.1"
 
       - name: Set up Rust and Android target
         uses: dtolnay/rust-toolchain@stable
