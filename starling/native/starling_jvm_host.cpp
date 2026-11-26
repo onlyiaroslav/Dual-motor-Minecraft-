@@ -44,6 +44,85 @@ jlong g_handle = 0;
 using ActionCb = void (*)(const int32_t* ids, size_t count);
 ActionCb g_action_cb = nullptr;
 
+// Funzione interna: avvia la JVM embedded e fa bootstrap (mod reali, ring,
+// tick 20 TPS, EngineSink). Condivisa tra BridgeService e MainActivity.
+// Restituisce true se successo, false su errore.
+bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
+                      const std::string& classpath, const std::string& mods,
+                      const std::string& lut, const std::string& mapping,
+                      const std::string& tmp) {
+    if (g_vm) return true;  // già avviata
+
+    // 1. dlopen della JRE Android (NON linkata alla build: l'NDK non ha libjvm).
+    g_jvm_lib = dlopen(jreLib.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    if (!g_jvm_lib) {
+        LOGE("dlopen libjvm fallita: %s\n", dlerror());
+        return false;
+    }
+    using CreateVmFn = jint (*)(JavaVM**, void**, void*);
+    auto create_vm = reinterpret_cast<CreateVmFn>(dlsym(g_jvm_lib, "JNI_CreateJavaVM"));
+    if (!create_vm) {
+        LOGE("JNI_CreateJavaVM non trovata in libjvm\n");
+        return false;
+    }
+
+    // 2. JVM headless nello stesso processo. tmpdir nella cache dell'app
+    //    (Scoped Storage: nessun permesso richiesto).
+    std::string cp = "-Djava.class.path=" + classpath;
+    std::string tmpdir = "-Djava.io.tmpdir=" + tmp;
+    JavaVMOption options[4];
+    options[0].optionString = const_cast<char*>("-Djava.awt.headless=true");
+    options[1].optionString = const_cast<char*>(cp.c_str());
+    options[2].optionString = const_cast<char*>(tmpdir.c_str());
+    options[3].optionString = const_cast<char*>("-Xss1m");
+    JavaVMInitArgs args;
+    args.version = JNI_VERSION_1_8;
+    args.nOptions = 4;
+    args.options = options;
+    args.ignoreUnrecognized = JNI_FALSE;
+
+    JNIEnv* jenv = nullptr;
+    if (create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args) != JNI_OK || !jenv) {
+        LOGE("JNI_CreateJavaVM fallita\n");
+        return false;
+    }
+
+    // 3. Bootstrap nella JVM embedded: scansione mod (mapping.bin gate),
+    //    jar reali, ring, attach, tick 20 TPS, EngineSink.
+    jclass bootstrap = jenv->FindClass("dev/starling/bridge/JvmBootstrap");
+    if (!bootstrap || jenv->ExceptionCheck()) {
+        LOGE("JvmBootstrap non trovata nel classpath\n");
+        if (jenv->ExceptionCheck()) jenv->ExceptionClear();
+        return false;
+    }
+    jmethodID start = jenv->GetStaticMethodID(
+            bootstrap, "start",
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)J");
+    jstring jMods2 = jenv->NewStringUTF(mods.c_str());
+    jstring jLut2 = jenv->NewStringUTF(lut.c_str());
+    jstring jMap2 = jenv->NewStringUTF(mapping.c_str());
+    g_handle = jenv->CallStaticLongMethod(bootstrap, start, jMods2, jLut2, jMap2);
+    jenv->DeleteLocalRef(jMods2);
+    jenv->DeleteLocalRef(jLut2);
+    jenv->DeleteLocalRef(jMap2);
+    if (jenv->ExceptionCheck()) {
+        jenv->ExceptionDescribe();
+        jenv->ExceptionClear();
+        LOGE("JvmBootstrap.start fallita\n");
+        return false;
+    }
+    g_bootstrap = static_cast<jclass>(jenv->NewGlobalRef(bootstrap));
+    g_stop = jenv->GetStaticMethodID(bootstrap, "stop", "(J)V");
+
+    jclass transport = jenv->FindClass("dev/starling/bridge/NativeTransport");
+    g_transport = static_cast<jclass>(jenv->NewGlobalRef(transport));
+    g_poll = jenv->GetStaticMethodID(transport, "nativePoll", "(J)I");
+
+    LOGI("JVM headless avviata in-process, handle=%lld\n",
+         static_cast<long long>(g_handle));
+    return true;
+}
+
 JNIEnv* attach_env() {
     JNIEnv* env = nullptr;
     jint rc = g_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_8);
@@ -121,83 +200,32 @@ Java_dev_starling_app_BridgeService_nativeStart(
         JNIEnv* env, jclass,
         jstring jJreLib, jstring jClasspath, jstring jMods,
         jstring jLut, jstring jMapping, jstring jTmpDir) {
-    if (g_vm) return JNI_TRUE;  // già avviata
-
     const std::string jreLib = to_std(env, jJreLib);
     const std::string classpath = to_std(env, jClasspath);
     const std::string mods = to_std(env, jMods);
     const std::string lut = to_std(env, jLut);
     const std::string mapping = to_std(env, jMapping);
     const std::string tmp = to_std(env, jTmpDir);
+    return startJvmEmbedded(env, jreLib, classpath, mods, lut, mapping, tmp)
+               ? JNI_TRUE
+               : JNI_FALSE;
+}
 
-    // 1. dlopen della JRE Android (NON linkata alla build: l'NDK non ha libjvm).
-    g_jvm_lib = dlopen(jreLib.c_str(), RTLD_NOW | RTLD_GLOBAL);
-    if (!g_jvm_lib) {
-        LOGE("dlopen libjvm fallita: %s\n", dlerror());
-        return JNI_FALSE;
-    }
-    using CreateVmFn = jint (*)(JavaVM**, void**, void*);
-    auto create_vm = reinterpret_cast<CreateVmFn>(dlsym(g_jvm_lib, "JNI_CreateJavaVM"));
-    if (!create_vm) {
-        LOGE("JNI_CreateJavaVM non trovata in libjvm\n");
-        return JNI_FALSE;
-    }
-
-    // 2. JVM headless nello stesso processo. tmpdir nella cache dell'app
-    //    (Scoped Storage: nessun permesso richiesto).
-    std::string cp = "-Djava.class.path=" + classpath;
-    std::string tmpdir = "-Djava.io.tmpdir=" + tmp;
-    JavaVMOption options[4];
-    options[0].optionString = const_cast<char*>("-Djava.awt.headless=true");
-    options[1].optionString = const_cast<char*>(cp.c_str());
-    options[2].optionString = const_cast<char*>(tmpdir.c_str());
-    options[3].optionString = const_cast<char*>("-Xss1m");
-    JavaVMInitArgs args;
-    args.version = JNI_VERSION_1_8;
-    args.nOptions = 4;
-    args.options = options;
-    args.ignoreUnrecognized = JNI_FALSE;
-
-    JNIEnv* jenv = nullptr;
-    if (create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args) != JNI_OK || !jenv) {
-        LOGE("JNI_CreateJavaVM fallita\n");
-        return JNI_FALSE;
-    }
-
-    // 3. Bootstrap nella JVM embedded: scansione mod (mapping.bin gate),
-    //    jar reali, ring, attach, tick 20 TPS, EngineSink.
-    jclass bootstrap = jenv->FindClass("dev/starling/bridge/JvmBootstrap");
-    if (!bootstrap || jenv->ExceptionCheck()) {
-        LOGE("JvmBootstrap non trovata nel classpath\n");
-        if (jenv->ExceptionCheck()) jenv->ExceptionClear();
-        return JNI_FALSE;
-    }
-    jmethodID start = jenv->GetStaticMethodID(
-            bootstrap, "start",
-            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)J");
-    jstring jMods2 = jenv->NewStringUTF(mods.c_str());
-    jstring jLut2 = jenv->NewStringUTF(lut.c_str());
-    jstring jMap2 = jenv->NewStringUTF(mapping.c_str());
-    g_handle = jenv->CallStaticLongMethod(bootstrap, start, jMods2, jLut2, jMap2);
-    jenv->DeleteLocalRef(jMods2);
-    jenv->DeleteLocalRef(jLut2);
-    jenv->DeleteLocalRef(jMap2);
-    if (jenv->ExceptionCheck()) {
-        jenv->ExceptionDescribe();
-        jenv->ExceptionClear();
-        LOGE("JvmBootstrap.start fallita\n");
-        return JNI_FALSE;
-    }
-    g_bootstrap = static_cast<jclass>(jenv->NewGlobalRef(bootstrap));
-    g_stop = jenv->GetStaticMethodID(bootstrap, "stop", "(J)V");
-
-    jclass transport = jenv->FindClass("dev/starling/bridge/NativeTransport");
-    g_transport = static_cast<jclass>(jenv->NewGlobalRef(transport));
-    g_poll = jenv->GetStaticMethodID(transport, "nativePoll", "(J)I");
-
-    LOGI("JVM headless avviata in-process, handle=%lld\n",
-         static_cast<long long>(g_handle));
-    return JNI_TRUE;
+// JNI per MainActivity (ART → avvio gioco diretto, stessa logica di BridgeService)
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_starling_app_MainActivity_nativeStartGame(
+        JNIEnv* env, jclass,
+        jstring jJreLib, jstring jClasspath, jstring jMods,
+        jstring jLut, jstring jMapping, jstring jTmpDir) {
+    const std::string jreLib = to_std(env, jJreLib);
+    const std::string classpath = to_std(env, jClasspath);
+    const std::string mods = to_std(env, jMods);
+    const std::string lut = to_std(env, jLut);
+    const std::string mapping = to_std(env, jMapping);
+    const std::string tmp = to_std(env, jTmpDir);
+    return startJvmEmbedded(env, jreLib, classpath, mods, lut, mapping, tmp)
+               ? JNI_TRUE
+               : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL

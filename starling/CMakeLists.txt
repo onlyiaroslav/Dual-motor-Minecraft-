@@ -21,7 +21,7 @@ target_link_libraries(starling_jvm_host ${log-lib} dl)
 
 # --- Libreria Rust (importata, buildata da cargo-ndk) -----------------------
 set(BRIDGE_JNI_SO
-        "${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/jniLibs/${ANDROID_ABI}/libbridge_jni.so")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs/${ANDROID_ABI}/libbridge_jni.so")
 if(EXISTS "${BRIDGE_JNI_SO}")
     add_library(bridge_jni SHARED IMPORTED)
     set_target_properties(bridge_jni PROPERTIES IMPORTED_LOCATION "${BRIDGE_JNI_SO}")

@@ -360,6 +360,133 @@ impl AiBackend for HttpAiBackend {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Backend embedded: avvia automaticamente un server AI locale (es. llama-server)
+// come processo figlio se non è già in ascolto, poi gli parla tramite HTTP.
+// ---------------------------------------------------------------------------
+
+use std::process::{Child, Command, Stdio};
+use std::thread;
+
+/// Configurazione per avviare un server AI locale come processo figlio.
+#[derive(Debug, Clone)]
+pub struct EmbeddedServerConfig {
+    /// Percorso all'eseguibile del server (es. `llama-server`).
+    pub server_exe: String,
+    /// Percorso al modello GGUF (es. `smollm2-360m-instruct-q4_k_m.gguf`).
+    pub model_path: String,
+    /// Porta su cui il server ascolterà.
+    pub port: u16,
+    /// Argomenti extra da passare all'eseguibile.
+    pub extra_args: Vec<String>,
+}
+
+impl Default for EmbeddedServerConfig {
+    fn default() -> Self {
+        Self {
+            server_exe: "llama-server".into(),
+            model_path: "smollm2-360m-instruct-q4_k_m.gguf".into(),
+            port: 8080,
+            extra_args: vec![
+                "--host".into(),
+                "127.0.0.1".into(),
+                "-c".into(),
+                "512".into(),
+            ],
+        }
+    }
+}
+
+/// Backend che avvia automaticamente un server AI locale come processo
+/// figlio se non è già raggiungibile, poi gli parla tramite HTTP.
+pub struct EmbeddedHttpBackend {
+    inner: HttpAiBackend,
+    child: Option<Child>,
+    config: EmbeddedServerConfig,
+    started: AtomicBool,
+}
+
+impl EmbeddedHttpBackend {
+    pub fn new(config: EmbeddedServerConfig) -> Self {
+        let endpoint =
+            format!("http://127.0.0.1:{}/v1/chat/completions", config.port);
+        Self {
+            inner: HttpAiBackend::with_transport(
+                endpoint,
+                Arc::new(ReqwestTransport::new()),
+            ),
+            child: None,
+            config,
+            started: AtomicBool::new(false),
+        }
+    }
+
+    /// Avvia il server come processo figlio se non è già raggiungibile.
+    fn ensure_server(&mut self) -> Result<(), AiBackendError> {
+        // Se già avviato o già raggiungibile, non fare nulla.
+        if self.started.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        if self.inner.transport.probe(&self.inner.endpoint) {
+            self.started.store(true, Ordering::SeqCst);
+            return Ok(());
+        }
+
+        let mut cmd = Command::new(&self.config.server_exe);
+        cmd.arg("-m").arg(&self.config.model_path);
+        cmd.arg("--host").arg("127.0.0.1");
+        cmd.arg("--port").arg(self.config.port.to_string());
+        cmd.arg("-c").arg("512");
+        for arg in &self.config.extra_args {
+            cmd.arg(arg);
+        }
+        cmd.stdout(Stdio::null());
+        cmd.stderr(Stdio::null());
+
+        match cmd.spawn() {
+            Ok(mut child) => {
+                // Aspetta che il server sia pronto (max ~10 secondi).
+                let deadline = std::time::Instant::now()
+                    + Duration::from_secs(10);
+                while std::time::Instant::now() < deadline {
+                    if self.inner.transport.probe(&self.inner.endpoint) {
+                        self.child = Some(child);
+                        self.started.store(true, Ordering::SeqCst);
+                        return Ok(());
+                    }
+                    thread::sleep(Duration::from_millis(500));
+                }
+                // Timeout: kill il processo.
+                let _ = child.kill();
+                Err(AiBackendError::ModelNotAvailable)
+            }
+            Err(_) => Err(AiBackendError::ModelNotAvailable),
+        }
+    }
+}
+
+impl AiBackend for EmbeddedHttpBackend {
+    fn load(&mut self) -> Result<(), AiBackendError> {
+        self.ensure_server()?;
+        self.inner.load()
+    }
+
+    fn translate_fragment(
+        &self,
+        java_method_signature: &str,
+    ) -> Result<Option<NativeAction>, AiBackendError> {
+        self.inner.translate_fragment(java_method_signature)
+    }
+}
+
+impl Drop for EmbeddedHttpBackend {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

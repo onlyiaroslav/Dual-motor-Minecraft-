@@ -44,20 +44,34 @@ class SettingsActivity : ComponentActivity() {
         private const val PREFS = "starling_settings"
         private const val KEY_AI_MOD = "ai_locale_conversione_mod"
         private const val KEY_AI_ENDPOINT = "ai_locale_endpoint"
+        private const val KEY_AI_AUTO_START = "ai_auto_start_server"
+        private const val KEY_AI_SERVER_EXE = "ai_server_exe_path"
+        private const val KEY_AI_MODEL_PATH = "ai_model_path"
         private const val DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
+        private const val DEFAULT_SERVER_EXE = "llama-server"
+        private const val DEFAULT_MODEL = "smollm2-360m-instruct-q4_k_m.gguf"
+        private const val AI_ASSET_DIR = "ai"
         private const val LIBRARY_REL = "mapping.bin"
         private const val OUT_REL = "conversion"
     }
 
     private lateinit var converter: AiConverterBridge
     private lateinit var aiSwitch: Switch
+    private lateinit var aiAutoStartSwitch: Switch
     private lateinit var statusView: TextView
     private lateinit var jarInput: EditText
+    private lateinit var exeInput: EditText
+    private lateinit var modelInput: EditText
     private lateinit var resultView: TextView
 
     private var endpoint: String = DEFAULT_ENDPOINT
     private lateinit var libraryFile: File
     private lateinit var outDir: File
+
+    // --- Server AI locale embedded (avvio automatico, zero-config) ---
+    private var aiAutoStart = false
+    private var serverExe = DEFAULT_SERVER_EXE
+    private var modelPath = DEFAULT_MODEL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +85,11 @@ class SettingsActivity : ComponentActivity() {
         val aiEnabled = prefs.getBoolean(KEY_AI_MOD, false)
         endpoint = prefs.getString(KEY_AI_ENDPOINT, DEFAULT_ENDPOINT) ?: DEFAULT_ENDPOINT
 
+        // Preferenze server embedded (zero-config AI locale).
+        aiAutoStart = prefs.getBoolean(KEY_AI_AUTO_START, false)
+        serverExe = prefs.getString(KEY_AI_SERVER_EXE, DEFAULT_SERVER_EXE) ?: DEFAULT_SERVER_EXE
+        modelPath = prefs.getString(KEY_AI_MODEL_PATH, DEFAULT_MODEL) ?: DEFAULT_MODEL
+
         converter = AiConverterBridge(
             endpoint,
             if (libraryFile.exists()) libraryFile.absolutePath else ""
@@ -79,8 +98,16 @@ class SettingsActivity : ComponentActivity() {
         setContentView(buildUi())
 
         aiSwitch.isChecked = aiEnabled
+        aiAutoStartSwitch.isChecked = aiAutoStart
+        exeInput.setText(serverExe)
+        modelInput.setText(modelPath)
         // Applica lo stato iniziale al layer nativo e aggiorna la status.
         applyAiState(aiEnabled)
+
+        // Avvia il server AI locale in background se richiesto (zero-config).
+        if (aiAutoStart) {
+            startEmbeddedAiServerIfNeeded()
+        }
     }
 
     private fun buildUi(): LinearLayout {
@@ -106,6 +133,31 @@ class SettingsActivity : ComponentActivity() {
             setOnCheckedChangeListener { _, isChecked -> onAiToggled(isChecked) }
         }
         root.addView(aiSwitch)
+
+        // --- Server AI locale embedded (avvio automatico) ---
+        aiAutoStartSwitch = Switch(this).apply {
+            text = "Avvia server AI locale automaticamente"
+            textSize = 14f
+        }
+        root.addView(aiAutoStartSwitch)
+
+        exeInput = EditText(this).apply {
+            hint = "Eseguibile server AI (es. llama-server)"
+            text = serverExe
+            inputType = InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setSingleLine()
+        }
+        root.addView(exeInput)
+
+        modelInput = EditText(this).apply {
+            hint = "Modello GGUF (es. smollm2-360m-instruct-q4_k_m.gguf)"
+            text = modelPath
+            inputType = InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setSingleLine()
+        }
+        root.addView(modelInput)
 
         statusView = TextView(this).apply {
             textSize = 13f
@@ -204,6 +256,59 @@ class SettingsActivity : ComponentActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    // -----------------------------------------------------------------------
+    // Server AI locale embedded: avvio automatico (zero configurazione utente)
+    // -----------------------------------------------------------------------
+
+    /** Avvia il server AI locale come processo figlio se non è già in ascolto.
+     *  Cerca l'eseguibile e il modello negli asset (ai/*) se non esistono
+     *  ancora nello storage privato dell'app. */
+    private fun startEmbeddedAiServerIfNeeded() {
+        val exeFile = extractAssetIfNeeded(serverExe, "$AI_ASSET_DIR/${serverExe.split("/").last()}")
+        val modelFile = extractAssetIfNeeded(modelPath, "$AI_ASSET_DIR/${modelPath.split("/").last()}")
+
+        if (!exeFile.exists()) {
+            statusView.text = "Eseguibile AI non trovato: $exeFile"
+            return
+        }
+        if (!modelFile.exists()) {
+            statusView.text = "Modello AI non trovato: $modelFile"
+            return
+        }
+
+        try {
+            val pb = ProcessBuilder(
+                exeFile.absolutePath,
+                "-m", modelFile.absolutePath,
+                "--host", "127.0.0.1",
+                "--port", "8080",
+                "-c", "512"
+            )
+            pb.directory(filesDir)
+            pb.redirectErrorStream(true)
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+            pb.start()
+            statusView.text = "Server AI locale in avvio su 127.0.0.1:8080…"
+        } catch (e: Exception) {
+            statusView.text = "Impossibile avviare server AI: ${e.message}"
+        }
+    }
+
+    /** Copia un asset nello storage privato se il file di destinazione non esiste. */
+    private fun extractAssetIfNeeded(path: String, assetName: String): File {
+        val dest = File(path)
+        if (dest.exists()) return dest
+        return try {
+            assets.open(assetName).use { input ->
+                dest.parentFile?.mkdirs()
+                input.copyTo(dest.outputStream())
+            }
+            dest
+        } catch (e: Exception) {
+            dest // resta inesistente, il chiamante gestisce l'errore
+        }
     }
 
     override fun onDestroy() {

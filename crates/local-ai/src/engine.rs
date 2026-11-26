@@ -14,7 +14,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-use crate::backend::{AiBackend, AiBackendError, HttpAiBackend, DEFAULT_ENDPOINT};
+use crate::backend::{
+    AiBackend, AiBackendError, EmbeddedServerConfig, HttpAiBackend,
+    DEFAULT_ENDPOINT,
+};
 use bridge_u8::NativeAction;
 
 /// Configurazione del motore AI locale.
@@ -121,6 +124,21 @@ impl LocalAiEngine {
             config,
             state: Arc::new(Mutex::new(EngineState::NotReady)),
             backend: Arc::new(Mutex::new(HttpAiBackend::new(endpoint))),
+        }
+    }
+
+    /// Crea un motore con backend **embedded**: avvia automaticamente un
+    /// server AI locale come processo figlio se non è già in ascolto.
+    /// Usato per il "tutto in locale, zero configurazione utente".
+    pub fn with_embedded(
+        config: LocalAiConfig,
+        embedded: EmbeddedServerConfig,
+    ) -> Self {
+        let endpoint = config.endpoint.clone();
+        Self {
+            config,
+            state: Arc::new(Mutex::new(EngineState::NotReady)),
+            backend: Arc::new(Mutex::new(EmbeddedHttpBackend::new(embedded))),
         }
     }
 

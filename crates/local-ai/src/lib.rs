@@ -20,7 +20,8 @@ pub mod backend;
 pub mod engine;
 
 pub use backend::{
-    AiBackend, AiBackendError, HttpAiBackend, HttpTransport, TransportError, DEFAULT_ENDPOINT,
+    AiBackend, AiBackendError, EmbeddedHttpBackend, EmbeddedServerConfig,
+    HttpAiBackend, HttpTransport, TransportError, DEFAULT_ENDPOINT,
     INFERENCE_TIMEOUT_SECS,
 };
 pub use engine::{

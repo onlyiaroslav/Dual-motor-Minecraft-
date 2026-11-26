@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema neutro: i colori veri sono gestiti da DogeTheme in Compose (Material 3, dark di default). -->
+    <style name="Theme.DogeClient" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

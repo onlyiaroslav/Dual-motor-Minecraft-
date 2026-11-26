@@ -41,30 +41,67 @@ android {
     }
 
     sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
+    // I file Kotlin esistenti (BridgeService, FriendsScreen, SettingsScreen,
+    // TexturePackImporter) sono ora in src/main/kotlin/dev/starling/app/
+    // (package dev.starling.app): Gradle li trova di default.
+    // I bridge Java esistenti (invariati) servono a FriendsActivity e
+    // SettingsActivity: li includiamo senza toccarli.
+    sourceSets["main"].java.srcDirs(
+        file("../../java/social-bridge/src/main/java"),
+        file("../../java/ai-converter/src/main/java"),
+    )
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    // Il compilatore Compose è gestito dal BOM (compatibile con Kotlin 2.0.21).
 }
 
 // --- Build Rust prima della build nativa ----------------------------------
 // Richiede: rustup target aarch64-linux-android, cargo-ndk, ANDROID_NDK_HOME.
-val cargoNdkBuild by tasks.registering(Exec::class) {
-    // Repo root (contiene crates/ e .cargo/config.toml con mirror + flag 16 KB)
-    workingDir = rootProject.projectDir.parentFile
+
+// Task 1: libbridge_jni.so (bridge a 8 bit + JNI, usato da starling_jvm_host).
+val cargoNdkBuildBridge by tasks.registering(Exec::class) {
+    workingDir = projectDir
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
         "-p", "33",
-        "-o", "starling/app/src/main/jniLibs",
+        "-o", "src/main/jniLibs",
         "build", "--release", "-p", "bridge-jni"
     )
 }
 
+// Task 2: libmod_converter.so (convertitore mod offline con AI locale, Fase 7).
+// Usa la feature "jni" per esportare i simboli JNI verso AiConverterBridge.java.
+val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
+    workingDir = projectDir
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "-p", "33",
+        "-o", "src/main/jniLibs",
+        "build", "--release", "-p", "mod-converter", "--features", "jni"
+    )
+}
+
 tasks.named("preBuild") {
-    dependsOn(cargoNdkBuild)
+    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter)
+}
+
+// --- Dipendenze Jetpack Compose (UI Doge Client) ---------------------------
+dependencies {
+    val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.9.0")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.ui:ui-tooling-preview")
 }
 
 // Asset richiesti (src/main/assets/):
