@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.dogeclient.app"
+    namespace = "dev.starling.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.dogeclient.app"
+        applicationId = "dev.starling.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
