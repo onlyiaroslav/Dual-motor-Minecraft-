@@ -1,4 +1,4 @@
-name: Build Debug APK
+name: Build Doge Client APK
 
 on:
   push:
@@ -32,6 +32,7 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;27.0.12077973" \
             "cmake;3.22.1"
+          sdkmanager --list_installed | head -40
 
       - name: Set up Rust and Android target
         uses: dtolnay/rust-toolchain@stable
@@ -39,7 +40,9 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+        run: |
+          cargo install cargo-ndk
+          cargo ndk --version
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -56,19 +59,40 @@ jobs:
       - name: Build Debug APK
         run: |
           chmod +x gradlew
+
+          # RISOLTO: non usare l'espressione env.ANDROID_SDK_ROOT qui (può essere
+          # vuota e generare un ANDROID_NDK_HOME tipo "/ndk/27..."). Usa la
+          # variabile esportata dalla action nella shell.
+          SDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          export ANDROID_HOME="$SDK_HOME"
+          export ANDROID_SDK_ROOT="$SDK_HOME"
+          export ANDROID_NDK_HOME="$SDK_HOME/ndk/27.0.12077973"
+          export PATH="$SDK_HOME/cmake/3.22.1/bin:$PATH"
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          test -d "$ANDROID_NDK_HOME" || { echo "NDK mancante: $ANDROID_NDK_HOME"; exit 1; }
+          java -version
+          cargo ndk --version
+          ./gradlew --version
+
           set +e
           ./gradlew :starling:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/gradle-build.log
           code=${PIPESTATUS[0]}
-          echo '<details><summary>Gradle output</summary>' >> "$GITHUB_STEP_SUMMARY"
-          echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          tail -160 /tmp/gradle-build.log >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+
+          # Copia l'output nel riepilogo del run: leggibile senza permessi admin.
+          {
+            echo '<details><summary>Gradle output</summary>'
+            echo '```text'
+            tail -200 /tmp/gradle-build.log
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
           exit $code
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.0.12077973
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: doge-client-debug-apk
