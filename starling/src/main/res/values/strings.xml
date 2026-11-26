@@ -1,9 +1,3 @@
 <resources>
     <string name="app_name">Doge Client</string>
-    <string name="nav_home">Home</string>
-    <string name="nav_mods">Mod</string>
-    <string name="nav_friends">Amici</string>
-    <string name="nav_settings">Impostazioni</string>
-    <string name="ready_to_play">Pronto per giocare</string>
-    <string name="avatar_description">Avatar utente</string>
 </resources>
