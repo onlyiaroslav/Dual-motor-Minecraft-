@@ -5,12 +5,14 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -18,10 +20,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools build-tools;34.0.0 platforms;android-34
+          packages: |
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;27.0.12077973
+            cmake;3.22.1
 
       - name: Set up Rust and Android target
         uses: dtolnay/rust-toolchain@stable
@@ -31,20 +37,8 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
 
-      - name: Generate Gradle wrapper
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q gradle-8.7-bin.zip -d /tmp/gradle
-          export PATH=/tmp/gradle/gradle-8.7/bin:$PATH
-          gradle wrapper --gradle-version 8.7
-        working-directory: .
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -52,17 +46,19 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Debug APK
-        run: ./gradlew :starling:assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew :starling:assembleDebug --stacktrace --no-daemon
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.0.12077973
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: doge-client-debug-apk
-          path: starling/build/outputs/apk/debug/starling-debug.apk
+          path: starling/build/outputs/apk/debug/*.apk
           retention-days: 30

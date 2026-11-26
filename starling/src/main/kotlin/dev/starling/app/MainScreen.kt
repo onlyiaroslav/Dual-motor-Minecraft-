@@ -1,22 +1,41 @@
 package dev.starling.app
 
-import androidx.compose.foundation.layout.*
+import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.content.Intent
-import dev.starling.app.FriendsActivity
-import dev.starling.app.SettingsActivity
 
 // ---------------------------------------------------------------------------
 // Schermate di navigazione
@@ -29,64 +48,49 @@ enum class Screen(val id: Int) {
 }
 
 // ---------------------------------------------------------------------------
-// Bottom Navigation in stile launcher gaming (Lunar/After Client style)
+// Bottom Navigation Material 3 in stile launcher gaming
 // ---------------------------------------------------------------------------
 @Composable
 private fun DogeBottomNavigation(
     selectedScreen: Screen,
     onItemClick: (Screen) -> Unit
 ) {
-    BottomNavigation(
-        backgroundColor = DogeSurface,
-        containerColor = DogeSurface
-    ) {
-        BottomNavigationItem(
-            icon = { Icon(Icons.Default.Home, contentDescription = null) },
-            label = { Text(stringResource(R.string.nav_home)) },
+    val itemColors = NavigationBarItemDefaults.colors(
+        selectedIconColor = DogePrimary,
+        selectedTextColor = DogePrimary,
+        indicatorColor = DogePrimary.copy(alpha = 0.18f),
+        unselectedIconColor = DogeTertiary.copy(alpha = 0.6f),
+        unselectedTextColor = DogeTertiary.copy(alpha = 0.6f),
+    )
+
+    NavigationBar(containerColor = DogeSurface) {
+        NavigationBarItem(
             selected = selectedScreen == Screen.Home,
             onClick = { onItemClick(Screen.Home) },
-            colors = BottomNavigationDefaults.colors(
-                unselectedIconColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedIconColor = DogePrimary,
-                unselectedLabelColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedLabelColor = DogePrimary,
-            )
+            icon = { Text("🏠", fontSize = 20.sp) },
+            label = { Text("Home") },
+            colors = itemColors
         )
-        BottomNavigationItem(
-            icon = { Icon(Icons.Default.List, contentDescription = null) },
-            label = { Text(stringResource(R.string.nav_mods)) },
+        NavigationBarItem(
             selected = selectedScreen == Screen.Mods,
             onClick = { onItemClick(Screen.Mods) },
-            colors = BottomNavigationDefaults.colors(
-                unselectedIconColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedIconColor = DogePrimary,
-                unselectedLabelColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedLabelColor = DogePrimary,
-            )
+            icon = { Text("🧩", fontSize = 20.sp) },
+            label = { Text("Mod") },
+            colors = itemColors
         )
-        BottomNavigationItem(
-            icon = { Icon(Icons.Default.People, contentDescription = null) },
-            label = { Text(stringResource(R.string.nav_friends)) },
+        NavigationBarItem(
             selected = selectedScreen == Screen.Friends,
             onClick = { onItemClick(Screen.Friends) },
-            colors = BottomNavigationDefaults.colors(
-                unselectedIconColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedIconColor = DogePrimary,
-                unselectedLabelColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedLabelColor = DogePrimary,
-            )
+            icon = { Text("🐕", fontSize = 20.sp) },
+            label = { Text("Amici") },
+            colors = itemColors
         )
-        BottomNavigationItem(
-            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-            label = { Text(stringResource(R.string.nav_settings)) },
+        NavigationBarItem(
             selected = selectedScreen == Screen.Settings,
             onClick = { onItemClick(Screen.Settings) },
-            colors = BottomNavigationDefaults.colors(
-                unselectedIconColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedIconColor = DogePrimary,
-                unselectedLabelColor = DogeTertiary.copy(alpha = 0.6f),
-                selectedLabelColor = DogePrimary,
-            )
+            icon = { Text("⚙️", fontSize = 20.sp) },
+            label = { Text("Impostazioni") },
+            colors = itemColors
         )
     }
 }
@@ -103,12 +107,13 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
 
-    // Stato di navigazione: Home rimane attiva; Amici/Impostazioni aprono
-    // le Activity esistenti (invariato) tramite Intent, senza riscriverle.
+    // Home rimane attiva; Amici/Impostazioni aprono le Activity esistenti
+    // (invariate) tramite Intent, senza riscriverle.
     var selectedScreen by rememberSaveable { mutableStateOf(Screen.Home) }
 
     Scaffold(
-        bottomNavigation = {
+        containerColor = DogeBackground,
+        bottomBar = {
             DogeBottomNavigation(
                 selectedScreen = selectedScreen,
                 onItemClick = { screen ->
@@ -118,7 +123,7 @@ fun MainScreen(
                         Screen.Mods -> onNavigateToMods()
                         Screen.Friends -> {
                             // Schermata Amici esistente (Fase 6): lista amici, token,
-                            // LAN invite. Invocata così com'è, nessun rischio di regressione.
+                            // LAN invite. Invocata così com'è, nessuna regressione.
                             context.startActivity(Intent(context, FriendsActivity::class.java))
                         }
                         Screen.Settings -> {
@@ -143,7 +148,7 @@ fun MainScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, horizontal = 20.dp),
+                    .padding(top = 24.dp, start = 20.dp, end = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -159,12 +164,12 @@ fun MainScreen(
                         .size(52.dp)
                         .clip(CircleShape)
                         .background(DogeSecondary)
-                        .clickable { /* apri profilo utente */ }
+                        .clickable { /* apri profilo utente */ },
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "🐶",
-                        fontSize = 26.sp,
-                        modifier = Modifier.align(Alignment.Center)
+                        fontSize = 26.sp
                     )
                 }
             }
@@ -175,50 +180,53 @@ fun MainScreen(
             // Centro: pulsante Play circolare con glow/ombra gialla
             // -----------------------------------------------------------------
             Column(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Contenitore per l'effetto glow attorno al pulsante
                 Box(
-                    modifier = Modifier.size(128.dp),
+                    modifier = Modifier.size(132.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Anello glow giallo traslucido dietro il pulsante
+                    // Anelli glow gialli traslucidi dietro il pulsante
                     Box(
                         modifier = Modifier
-                            .size(112.dp)
+                            .size(124.dp)
                             .clip(CircleShape)
-                            .background(DogePrimary.copy(alpha = 0.18))
+                            .background(DogePrimary.copy(alpha = 0.12f))
                     )
-                }
+                    Box(
+                        modifier = Modifier
+                            .size(108.dp)
+                            .clip(CircleShape)
+                            .background(DogePrimary.copy(alpha = 0.22f))
+                    )
 
-                // Pulsante Play vero e proprio
-                Button(
-                    onClick = onStartGame,
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .border(4.dp, DogePrimary, CircleShape)
-                        .background(Color(0xFF121212)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DogePrimary,
-                        contentColor = Color.BLACK
-                    ),
-                    shape = CircleShape,
-                    elevation = 8.dp
-                ) {
-                    Text(
-                        text = "🦴",
-                        fontSize = 36.sp,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    // Pulsante Play vero e proprio
+                    Button(
+                        onClick = onStartGame,
+                        modifier = Modifier
+                            .size(88.dp)
+                            .border(4.dp, DogePrimary, CircleShape),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF121212),
+                            contentColor = DogePrimary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 8.dp,
+                            pressedElevation = 2.dp
+                        ),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(text = "🦴", fontSize = 38.sp)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = stringResource(R.string.ready_to_play),
+                    text = "Pronto per giocare",
                     style = MaterialTheme.typography.bodyLarge,
                     color = DogeTertiary
                 )

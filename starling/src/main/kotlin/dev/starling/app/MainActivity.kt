@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
          * ring buffer, tick 20 TPS. Stessa logica di BridgeService.nativeStart.
          * Restituisce true se l'avvio riesce.
          */
+        @JvmStatic
         external fun nativeStartGame(
             jreLib: String,
             classpath: String,
@@ -66,18 +67,24 @@ class MainActivity : ComponentActivity() {
         val bridgeDir = File(ctx.filesDir, "bridge").apply { mkdirs() }
 
         // Classi del bridge per la JVM embedded (jar, NON dex).
+        // Se l'asset non è presente, non blocchiamo l'avvio della UI: il
+        // pulsante Play resterà senza effetto finché il jar non viene aggiunto.
         val bridgeJar = File(bridgeDir, "bridge-u8.jar")
         if (!bridgeJar.exists()) {
-            ctx.assets.open("bridge-u8.jar").use { input ->
-                bridgeJar.outputStream().use { input.copyTo(it) }
+            runCatching {
+                ctx.assets.open("bridge-u8.jar").use { input ->
+                    bridgeJar.outputStream().use { input.copyTo(it) }
+                }
             }
         }
 
         // mapping.bin: default offline, se assente si usa quello impacchettato.
         val mapping = File(lut, "mapping.bin")
         if (!mapping.exists()) {
-            ctx.assets.open("mapping.bin").use { input ->
-                mapping.outputStream().use { input.copyTo(it) }
+            runCatching {
+                ctx.assets.open("mapping.bin").use { input ->
+                    mapping.outputStream().use { input.copyTo(it) }
+                }
             }
         }
 

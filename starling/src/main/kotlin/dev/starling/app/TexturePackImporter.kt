@@ -5,8 +5,10 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import dev.starling.packs.BaseAction
 import dev.starling.packs.PackGate
 import dev.starling.packs.PackImporter
+import dev.starling.packs.Result as PackImportResult
 import java.io.File
 
 /**
@@ -58,14 +60,14 @@ class TexturePackImporter(private val activity: ComponentActivity) {
     }
 
     /** Importa lo zip selezionato nella sandbox privata. */
-    fun import(uri: Uri): PackImporter.Result {
+    fun import(uri: Uri): PackImportResult {
         val name = queryDisplayName(uri) ?: "pack"
         val result = try {
             activity.contentResolver.openInputStream(uri)?.use { input ->
                 core.importZip(input, packsDir.toPath(), name, PACK_FORMAT)
-            } ?: PackImporter.Result.fail("impossibile aprire il file selezionato")
+            } ?: PackImportResult.fail("impossibile aprire il file selezionato")
         } catch (e: Exception) {
-            PackImporter.Result.fail("lettura fallita: ${e.message}")
+            PackImportResult.fail("lettura fallita: ${e.message}")
         }
         if (result.ok) {
             gate.onExternalPackValid()
@@ -79,7 +81,7 @@ class TexturePackImporter(private val activity: ComponentActivity) {
      * Chiamata dal launcher all'avvio: scarica i file base SOLO se mancano
      * davvero. Il fallimento di pack esterni non entra in questa decisione.
      */
-    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): PackGate.BaseAction =
+    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): BaseAction =
         gate.checkBaseFiles(baseFilesMissing)
 
     /** Hook per il resource manager di Starling (reload immediato del pack). */
