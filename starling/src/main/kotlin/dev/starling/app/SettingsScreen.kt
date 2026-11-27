@@ -151,7 +151,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var runtimeMessage by remember { mutableStateOf<String?>(null) }
     var runtimeError by remember { mutableStateOf(false) }
     var runtimeBusy by remember { mutableStateOf(false) }
-    var runtimeUrl by rememberSaveable { mutableStateOf("") }
+    var runtimeUrl by rememberSaveable { mutableStateOf(JreInstaller.DEFAULT_JRE_URL) }
     var runtimeProgress by remember { mutableStateOf<InstallState?>(null) }
 
     val runtimePicker = rememberLauncherForActivityResult(
@@ -229,6 +229,31 @@ fun SettingsContent(modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) {
         installedPacks = withContext(Dispatchers.IO) { listPacks(ctx) }
+    }
+
+    fun downloadJre(url: String) {
+        scope.launch {
+            runtimeBusy = true
+            runtimeProgress = null
+            val result = withContext(Dispatchers.IO) {
+                JreInstaller.downloadAndInstall(
+                    ctx,
+                    url,
+                    url.substringAfterLast('/').ifBlank { JreInstaller.DEFAULT_JRE_NAME },
+                ) { state -> runtimeProgress = state }
+            }
+            runtimeBusy = false
+            result
+                .onSuccess {
+                    runtimeMessage = "Runtime pronto: ${it.absolutePath}"
+                    runtimeError = false
+                    refresh++
+                }
+                .onFailure {
+                    runtimeMessage = it.message ?: "Download del runtime fallito"
+                    runtimeError = true
+                }
+        }
     }
 
     fun libraryPath(): String {
@@ -626,6 +651,20 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             DogeInfoRow("Percorso", runtime.absolutePath)
             Spacer(Modifier.height(12.dp))
             DogePrimaryButton(
+                text = "Scarica JRE 17 (consigliato)",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !runtimeBusy,
+                onClick = { downloadJre(JreInstaller.DEFAULT_JRE_URL) },
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "PojavLauncher · jre17-arm64 · ~50 MB, estratto in memoria privata.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = DogeTextSecondary,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            DogeGhostButton(
                 text = "Carica JRE (.tar.xz / .zip)",
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !runtimeBusy,
@@ -644,29 +683,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 text = "Scarica runtime",
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !runtimeBusy && runtimeUrl.isNotBlank(),
-                onClick = {
-                    scope.launch {
-                        runtimeBusy = true
-                        val result = withContext(Dispatchers.IO) {
-                            JreInstaller.downloadAndInstall(
-                                ctx,
-                                runtimeUrl,
-                                runtimeUrl.substringAfterLast('/').ifBlank { "jre.tar.xz" },
-                            ) { state -> runtimeProgress = state }
-                        }
-                        runtimeBusy = false
-                        result
-                            .onSuccess {
-                                runtimeMessage = "Runtime pronto: ${it.absolutePath}"
-                                runtimeError = false
-                                refresh++
-                            }
-                            .onFailure {
-                                runtimeMessage = it.message ?: "Download del runtime fallito"
-                                runtimeError = true
-                            }
-                    }
-                },
+                onClick = { downloadJre(runtimeUrl) },
             )
             val progress = runtimeProgress
             if (progress != null && progress.running) {

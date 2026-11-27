@@ -26,6 +26,16 @@ import java.util.zip.ZipInputStream
  */
 object JreInstaller {
 
+    /**
+     * JRE 17 arm64 di PojavLauncher: la build più testata per Minecraft Java
+     * su Android. Link diretto all'asset .tar.xz (nessuna pagina di release).
+     */
+    const val DEFAULT_JRE_URL =
+        "https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch/" +
+            "releases/download/jre17-ec28559/jre17-arm64-20210825-release.tar.xz"
+
+    const val DEFAULT_JRE_NAME = "jre17-arm64-20210825-release.tar.xz"
+
     /** Directory privata del runtime: /data/data/<pkg>/files/runtime. */
     fun runtimeDir(ctx: Context): File = File(ctx.filesDir, "runtime")
 
@@ -137,14 +147,15 @@ object JreInstaller {
             readTimeout = 30_000
             instanceFollowRedirects = true
         }
-        val total = conn.contentLengthLong.coerceAtLeast(0L)
-        if (conn.responseCode !in 200..299) {
-            val code = conn.responseCode
+        val code = conn.responseCode
+        if (code !in 200..299) {
             conn.disconnect()
             throw IllegalStateException("HTTP $code scaricando il JRE")
         }
+        val total = conn.contentLengthLong.coerceAtLeast(0L)
 
         var done = 0L
+        var lastEmit = 0L
         fun emit(running: Boolean) {
             onUpdate(
                 InstallState(
@@ -159,17 +170,24 @@ object JreInstaller {
             )
         }
 
+        fun maybeEmit() {
+            if (done - lastEmit >= 256 * 1024) {
+                lastEmit = done
+                emit(true)
+            }
+        }
+
         emit(true)
         val counting = object : InputStream() {
             private val src = conn.inputStream
             override fun read(): Int {
                 val v = src.read()
-                if (v >= 0) { done++; emit(true) }
+                if (v >= 0) { done++; maybeEmit() }
                 return v
             }
             override fun read(b: ByteArray, off: Int, len: Int): Int {
                 val n = src.read(b, off, len)
-                if (n > 0) { done += n; emit(true) }
+                if (n > 0) { done += n; maybeEmit() }
                 return n
             }
             override fun close() = src.close()
