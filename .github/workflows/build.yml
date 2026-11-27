@@ -69,6 +69,8 @@ jobs:
             export ANDROID_HOME="$SDK_HOME"
             export ANDROID_SDK_ROOT="$SDK_HOME"
             export ANDROID_NDK_HOME="$SDK_HOME/ndk/27.0.12077973"
+            export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+            export ANDROID_NDK="$ANDROID_NDK_HOME"
             export PATH="$SDK_HOME/cmake/3.22.1/bin:$PATH"
 
             echo "ANDROID_HOME=$ANDROID_HOME"

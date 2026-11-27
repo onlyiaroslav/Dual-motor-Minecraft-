@@ -36,8 +36,8 @@ endif()
 option(BRIDGE_BUILD_RUST "Compila il bridge Rust con cargo-ndk durante la build" OFF)
 if(BRIDGE_BUILD_RUST)
     add_custom_target(bridge_rust ALL
-            COMMAND cargo ndk -t ${ANDROID_ABI} -p 33
-                    -o "${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/jniLibs"
+            COMMAND cargo ndk -t ${ANDROID_ABI} --platform 33
+                    -o "${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs"
                     build --release -p bridge-jni
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
             COMMENT "cargo-ndk: build libbridge_jni.so (${ANDROID_ABI})")
