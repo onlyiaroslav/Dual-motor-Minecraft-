@@ -16,6 +16,12 @@
 #include <jni.h>
 #include <dlfcn.h>
 
+// L'jni.h dell'NDK Android non definisce JNI_VERSION_1_8 (presente solo nel
+// JNI desktop). Lo definiamo qui se manca, per evitare "undeclared identifier".
+#ifndef JNI_VERSION_1_8
+#define JNI_VERSION_1_8 0x00010008
+#endif
+
 #include <cstdint>
 #include <string>
 

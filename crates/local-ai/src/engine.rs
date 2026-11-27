@@ -134,7 +134,6 @@ impl LocalAiEngine {
         config: LocalAiConfig,
         embedded: EmbeddedServerConfig,
     ) -> Self {
-        let endpoint = config.endpoint.clone();
         Self {
             config,
             state: Arc::new(Mutex::new(EngineState::NotReady)),

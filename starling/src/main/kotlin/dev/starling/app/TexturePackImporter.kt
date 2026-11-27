@@ -44,9 +44,12 @@ class TexturePackImporter(private val activity: ComponentActivity) {
             if (uri != null) {
                 val result = import(uri)
                 if (result.ok) {
-                    toast("Pack importato: ${result.packDir.fileName}")
-                    // Notifica il launcher/resource manager per il reload immediato.
-                    onPackImported(result.packDir.toFile())
+                    val dir = result.packDir
+                    if (dir != null) {
+                        toast("Pack importato: ${dir.fileName}")
+                        // Notifica il launcher/resource manager per il reload immediato.
+                        onPackImported(dir.toFile())
+                    }
                 } else {
                     // Pack scartato: messaggio d'errore, NESSUN restart dei download.
                     toast("Pack scartato: ${result.error}")
@@ -72,7 +75,7 @@ class TexturePackImporter(private val activity: ComponentActivity) {
         if (result.ok) {
             gate.onExternalPackValid()
         } else {
-            gate.onExternalPackInvalid(result.error) // → BaseAction.NONE, mai download
+            gate.onExternalPackInvalid(result.error ?: "errore sconosciuto") // → BaseAction.NONE, mai download
         }
         return result
     }

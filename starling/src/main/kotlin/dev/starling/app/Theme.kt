@@ -26,8 +26,8 @@ private val DogeDarkColorScheme = darkColorScheme(
     tertiary = DogeTertiary,
     background = DogeBackground,
     surface = DogeSurface,
-    onPrimary = Color.BLACK,
-    onSecondary = Color.WHITE,
+    onPrimary = Color.Black,
+    onSecondary = Color.White,
     onBackground = DogeTertiary,
     onSurface = DogeTertiary,
 )

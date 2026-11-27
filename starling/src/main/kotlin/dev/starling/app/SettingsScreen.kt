@@ -143,7 +143,7 @@ class SettingsActivity : ComponentActivity() {
 
         exeInput = EditText(this).apply {
             hint = "Eseguibile server AI (es. llama-server)"
-            text = serverExe
+            setText(serverExe)
             inputType = InputType.TYPE_CLASS_TEXT
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setSingleLine()
@@ -152,7 +152,7 @@ class SettingsActivity : ComponentActivity() {
 
         modelInput = EditText(this).apply {
             hint = "Modello GGUF (es. smollm2-360m-instruct-q4_k_m.gguf)"
-            text = modelPath
+            setText(modelPath)
             inputType = InputType.TYPE_CLASS_TEXT
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setSingleLine()
@@ -263,7 +263,7 @@ class SettingsActivity : ComponentActivity() {
     // -----------------------------------------------------------------------
 
     /** Avvia il server AI locale come processo figlio se non è già in ascolto.
-     *  Cerca l'eseguibile e il modello negli asset (ai/*) se non esistono
+     *  Cerca l'eseguibile e il modello negli asset (cartella ai) se non esistono
      *  ancora nello storage privato dell'app. */
     private fun startEmbeddedAiServerIfNeeded() {
         val exeFile = extractAssetIfNeeded(serverExe, "$AI_ASSET_DIR/${serverExe.split("/").last()}")

@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
     // -----------------------------------------------------------------------
 
     /** Avvia il server AI locale come processo figlio se non è già in ascolto.
-     *  Cerca l'eseguibile e il modello negli asset (ai/*) se non esistono
+     *  Cerca l'eseguibile e il modello negli asset (cartella ai) se non esistono
      *  ancora nello storage privato dell'app. */
     private fun startEmbeddedAiServer(exePath: String, modelPath: String) {
         val exeFile = extractAssetIfNeeded(exePath, "$AI_ASSET_DIR/${exePath.split("/").last()}")
