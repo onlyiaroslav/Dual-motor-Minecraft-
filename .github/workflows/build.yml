@@ -58,38 +58,46 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          chmod +x gradlew
-
-          # RISOLTO: non usare l'espressione env.ANDROID_SDK_ROOT qui (può essere
-          # vuota e generare un ANDROID_NDK_HOME tipo "/ndk/27..."). Usa la
-          # variabile esportata dalla action nella shell.
-          SDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
-          export ANDROID_HOME="$SDK_HOME"
-          export ANDROID_SDK_ROOT="$SDK_HOME"
-          export ANDROID_NDK_HOME="$SDK_HOME/ndk/27.0.12077973"
-          export PATH="$SDK_HOME/cmake/3.22.1/bin:$PATH"
-
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          test -d "$ANDROID_NDK_HOME" || { echo "NDK mancante: $ANDROID_NDK_HOME"; exit 1; }
-          java -version
-          cargo ndk --version
-          ./gradlew --version
-
           set +e
-          ./gradlew :starling:assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/gradle-build.log
-          code=${PIPESTATUS[0]}
+          (
+            set -e
+            chmod +x gradlew
 
-          # Copia l'output nel riepilogo del run: leggibile senza permessi admin.
+            # NDK/SDK calcolati nella shell, non con espressioni che possono
+            # risultare vuote.
+            SDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+            export ANDROID_HOME="$SDK_HOME"
+            export ANDROID_SDK_ROOT="$SDK_HOME"
+            export ANDROID_NDK_HOME="$SDK_HOME/ndk/27.0.12077973"
+            export PATH="$SDK_HOME/cmake/3.22.1/bin:$PATH"
+
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+            ls -la "$SDK_HOME/ndk" 2>&1 || true
+            java -version
+            cargo ndk --version
+            ./gradlew --version
+
+            ./gradlew :starling:assembleDebug --stacktrace --no-daemon
+          ) 2>&1 | tee /tmp/gradle-build.log
+          code=${PIPESTATUS[0]}
+          echo "BUILD_EXIT_CODE=$code"
+          exit $code
+
+      - name: Write build log to run summary
+        if: always()
+        run: |
           {
             echo '<details><summary>Gradle output</summary>'
             echo '```text'
-            tail -200 /tmp/gradle-build.log
+            if [ -f /tmp/gradle-build.log ]; then
+              tail -240 /tmp/gradle-build.log
+            else
+              echo "(nessun log: lo step è fallito prima di creare il file)"
+            fi
             echo '```'
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
-
-          exit $code
 
       - name: Upload APK artifact
         if: success()
