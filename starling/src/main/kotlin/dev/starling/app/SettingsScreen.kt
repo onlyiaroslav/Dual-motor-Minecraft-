@@ -6,10 +6,11 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.starling.converter.AiConverterBridge
+import dev.starling.packs.PackGate
+import dev.starling.packs.PackImporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -97,6 +100,7 @@ private const val LIBRARY_REL = "mapping.bin"
 private const val OUT_REL = "conversion"
 private const val KEY_XRAY = "doge_xray"
 private const val KEY_ENGINE_OPT = "doge_engine_optimizations"
+private const val PACK_FORMAT = 34
 
 @Composable
 fun SettingsContent(modifier: Modifier = Modifier) {
@@ -134,6 +138,49 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var xrayEnabled by remember { mutableStateOf(prefs.getBoolean(KEY_XRAY, false)) }
     var engineOptimized by remember { mutableStateOf(prefs.getBoolean(KEY_ENGINE_OPT, true)) }
     var showXrayWarning by remember { mutableStateOf(false) }
+
+    // --- Import texture pack (core PackImporter, anti-loop PackGate) ------
+    var packMessage by remember { mutableStateOf<String?>(null) }
+    var packError by remember { mutableStateOf(false) }
+    var packBusy by remember { mutableStateOf(false) }
+
+    val packPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                packBusy = true
+                val result = withContext(Dispatchers.IO) {
+                    try {
+                        val packsDir = File(
+                            ctx.getExternalFilesDir(null) ?: ctx.filesDir,
+                            "resourcepacks",
+                        ).apply { mkdirs() }
+                        val name = packDisplayName(ctx, uri)
+                        val input = ctx.contentResolver.openInputStream(uri)
+                            ?: throw IllegalStateException("impossibile aprire il file selezionato")
+                        input.use {
+                            PackImporter().importZip(it, packsDir.toPath(), name, PACK_FORMAT)
+                        }
+                    } catch (e: Exception) {
+                        dev.starling.packs.Result.fail(e.message ?: "importazione fallita")
+                    }
+                }
+                packBusy = false
+                val gate = PackGate()
+                if (result.ok) {
+                    gate.onExternalPackValid()
+                    packMessage = "Pack importato: ${result.packDir?.fileName}"
+                    packError = false
+                } else {
+                    // Pack scartato: nessun restart dei download (anti-loop).
+                    gate.onExternalPackInvalid(result.error ?: "errore sconosciuto")
+                    packMessage = "Pack scartato: ${result.error}"
+                    packError = true
+                }
+            }
+        }
+    }
 
     fun libraryPath(): String {
         val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
@@ -509,6 +556,38 @@ fun SettingsContent(modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(14.dp))
 
+        // --- Texture pack --------------------------------------------------
+        DogeCard {
+            DogeSectionTitle("Texture pack")
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Importa un .zip: viene estratto in resourcepacks/ con pack.mcmeta " +
+                    "generato se assente o corretto se manca pack_format.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = DogeTextSecondary,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            DogePrimaryButton(
+                text = "Importa pack",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !packBusy,
+                onClick = { packPicker.launch(arrayOf("application/zip")) },
+            )
+            val currentPackMessage = packMessage
+            if (currentPackMessage != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    currentPackMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (packError) DogeDanger else DogeSuccess,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
         DogeCard {
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
@@ -634,6 +713,17 @@ private fun describeAiState(state: String, endpoint: String): String = when (sta
     "not_ready" -> "AI attiva ma server non raggiungibile ($endpoint): fallback senza AI."
     "disarmed" -> "AI disattivata: conversione con sola libreria mapping.bin."
     else -> "Stato AI: $state"
+}
+
+/** Nome visualizzato del file scelto (fallback sul path dell'Uri). */
+private fun packDisplayName(ctx: Context, uri: android.net.Uri): String {
+    val fromQuery = runCatching {
+        ctx.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+    return fromQuery ?: uri.lastPathSegment?.substringAfterLast('/') ?: "pack.zip"
 }
 
 private fun toast(ctx: Context, message: String) {

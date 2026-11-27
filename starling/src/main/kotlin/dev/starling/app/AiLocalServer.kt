@@ -28,7 +28,10 @@ object AiLocalServer {
             throw IllegalStateException("Modello AI non trovato: ${model.absolutePath}")
         }
 
-        val process = ProcessBuilder(
+        // NB: niente Process.pid(): non è esposto negli stub Android usati dal
+        // compileSdk, quindi non è portabile. Il processo figlio resta vivo
+        // indipendentemente dal riferimento Java.
+        ProcessBuilder(
             exe.absolutePath,
             "-m", model.absolutePath,
             "--host", "127.0.0.1",
@@ -40,7 +43,7 @@ object AiLocalServer {
             redirectOutput(ProcessBuilder.Redirect.INHERIT)
         }.start()
 
-        "Server AI avviato (pid ${process.pid()}) su 127.0.0.1:8080"
+        "Server AI avviato su 127.0.0.1:8080"
     }
 
     private fun fileName(path: String): String =

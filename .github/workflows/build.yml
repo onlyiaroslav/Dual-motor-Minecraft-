@@ -17,6 +17,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Controllo statico rapido (<1s): intercetta import mancanti, delegate
+      # senza getValue/setValue, commenti nidificati, parentesi sbilanciate e
+      # API Java non disponibili su Android PRIMA di spendere minuti di build.
+      - name: Verifica statica sorgenti Kotlin
+        run: python3 scripts/check-kotlin.py .
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:

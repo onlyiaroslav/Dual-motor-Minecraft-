@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -349,7 +350,7 @@ fun rememberSkinHead(nickname: String): State<ImageBitmap?> {
             value = SkinCache.get(nickname)
             return@produceState
         }
-        value = withContext(Dispatchers.IO) {
+        val fetched = withContext(Dispatchers.IO) {
             runCatching {
                 val encoded = URLEncoder.encode(nickname, "UTF-8")
                 val conn = URL("https://mc-heads.net/avatar/$encoded/128")
@@ -358,8 +359,12 @@ fun rememberSkinHead(nickname: String): State<ImageBitmap?> {
                 conn.readTimeout = 4000
                 conn.instanceFollowRedirects = true
                 conn.inputStream.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
-            }.getOrNull().also { SkinCache.put(nickname, it) }
+            }.getOrNull()
         }
+        // In cache solo i successi: un fetch fallito (offline) deve poter essere
+        // ritentato quando la rete torna, altrimenti l'avatar resta vuoto per sempre.
+        if (fetched != null) SkinCache.put(nickname, fetched)
+        value = fetched
     }
 }
 
