@@ -95,8 +95,22 @@ val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
     )
 }
 
+// Task 3: libstarling_social.so (lista amici + inviti LAN, Fase 6).
+// Senza questa libreria SocialBridge.java va in UnsatisfiedLinkError e la
+// schermata Amici crasha a runtime.
+val cargoNdkBuildSocial by tasks.registering(Exec::class) {
+    workingDir = rootProject.projectDir
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "--platform", "33",
+        "-o", "starling/src/main/jniLibs",
+        "build", "--release", "-p", "starling-social", "--features", "jni"
+    )
+}
+
 tasks.named("preBuild") {
-    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter)
+    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter, cargoNdkBuildSocial)
 }
 
 // --- Dipendenze Jetpack Compose (UI Doge Client) ---------------------------
