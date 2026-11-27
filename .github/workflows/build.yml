@@ -60,6 +60,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Debug APK
+        id: buildapk
         run: |
           set +e
           (
@@ -92,6 +93,7 @@ jobs:
       - name: Write build log to run summary
         if: always()
         run: |
+          set +e
           {
             echo '<details><summary>Gradle output</summary>'
             echo '```text'
@@ -104,17 +106,17 @@ jobs:
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Emetti l'errore come annotazione: leggibile via API anche senza login.
-          # Le annotazioni sono limitate a 4096 caratteri: mostriamo inizio, fine
-          # e le righe di errore rilevanti.
+          # Annotazioni pubbliche (limitate a 4096 caratteri). Mai fallire qui:
+          # sono solo diagnostica, non devono marcare il run come failure.
           if [ -f /tmp/gradle-build.log ]; then
             cp /tmp/gradle-build.log "$GITHUB_WORKSPACE/gradle-build.log"
             sed 's/\x1b\[[0-9;]*m//g' /tmp/gradle-build.log > /tmp/gradle-clean.log
             enc() { sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/\r/%0D/g'; }
-            head -c 3500 /tmp/gradle-clean.log | enc | { read -r m; echo "::error title=Gradle log (inizio)::$m"; }
-            tail -c 3500 /tmp/gradle-clean.log | enc | { read -r m; echo "::error title=Gradle log (fine)::$m"; }
-            grep -nE "error(\[E[0-9]+\])?:|FAILED|What went wrong|Caused by|panicked|Execution failed" /tmp/gradle-clean.log | head -40 | enc | { read -r m; echo "::error title=Gradle errori rilevati::$m"; }
+            head -c 3500 /tmp/gradle-clean.log | enc | { read -r m; echo "::notice title=Gradle log (inizio)::$m"; } || true
+            tail -c 3500 /tmp/gradle-clean.log | enc | { read -r m; echo "::notice title=Gradle log (fine)::$m"; } || true
+            grep -nE "error(\[E[0-9]+\])?:|FAILED|What went wrong|Caused by|panicked|Execution failed" /tmp/gradle-clean.log | head -40 | enc | { read -r m; echo "::error title=Gradle errori rilevati::$m"; } || true
           fi
+          exit 0
 
       - name: Publish full build log to ci-logs branch
         if: always()
@@ -139,7 +141,7 @@ jobs:
           retention-days: 7
 
       - name: Upload APK artifact
-        if: success()
+        if: steps.buildapk.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: doge-client-debug-apk
