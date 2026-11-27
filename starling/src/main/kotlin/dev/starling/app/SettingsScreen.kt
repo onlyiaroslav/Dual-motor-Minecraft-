@@ -161,26 +161,23 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             scope.launch {
                 runtimeBusy = true
                 val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val dest = File(GameInstaller.gameDir(ctx), "runtime/libjvm.so")
-                        dest.parentFile?.mkdirs()
-                        val input = ctx.contentResolver.openInputStream(uri)
-                            ?: throw IllegalStateException("impossibile aprire il file selezionato")
-                        input.use { source ->
-                            dest.outputStream().use { output -> source.copyTo(output) }
-                        }
-                        dest
+                    val name = packDisplayName(ctx, uri)
+                    val input = ctx.contentResolver.openInputStream(uri)
+                    if (input == null) {
+                        Result.failure(IllegalStateException("impossibile aprire il file selezionato"))
+                    } else {
+                        input.use { JreInstaller.install(ctx, it, name) }
                     }
                 }
                 runtimeBusy = false
                 result
                     .onSuccess {
-                        runtimeMessage = "Runtime caricato: ${formatMb(it.length())} in ${it.absolutePath}"
+                        runtimeMessage = "Runtime pronto: ${it.absolutePath}"
                         runtimeError = false
                         refresh++
                     }
                     .onFailure {
-                        runtimeMessage = it.message ?: "Caricamento runtime fallito"
+                        runtimeMessage = it.message ?: "Installazione runtime fallita"
                         runtimeError = true
                     }
             }
@@ -567,7 +564,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             Spacer(Modifier.height(10.dp))
 
             StatusRow(
-                label = "Runtime Java (libjvm.so)",
+                label = "Runtime Java (memoria privata)",
                 ok = runtime.exists(),
                 detail = if (runtime.exists()) formatMb(runtime.length()) else "mancante",
             )
@@ -613,9 +610,9 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             DogeSectionTitle("Runtime Java")
             Spacer(Modifier.height(10.dp))
             Text(
-                "Il gioco embedded usa una JRE Android arm64. Se libjvm.so non è " +
-                    "impacchettato nell'APK puoi caricarlo qui: viene usato il percorso " +
-                    "minecraft/runtime/libjvm.so.",
+                "Carica un archivio JRE Android arm64 (.tar.xz o .zip): viene estratto " +
+                    "nella memoria privata dell'app. Da Android 10+ le librerie non " +
+                    "possono essere caricate dallo storage esterno.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = DogeTextSecondary,
                 fontSize = 12.sp,
@@ -629,7 +626,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             DogeInfoRow("Percorso", runtime.absolutePath)
             Spacer(Modifier.height(12.dp))
             DogePrimaryButton(
-                text = "Carica libjvm.so",
+                text = "Carica JRE (.tar.xz / .zip)",
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !runtimeBusy,
                 onClick = { runtimePicker.launch(arrayOf("*/*")) },
@@ -638,8 +635,8 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             DogeTextField(
                 value = runtimeUrl,
                 onValueChange = { runtimeUrl = it },
-                label = "Oppure URL del runtime (libjvm.so)",
-                placeholder = "https://…/libjvm.so",
+                label = "Oppure URL dell'archivio JRE",
+                placeholder = "https://…/jre17-arm64.tar.xz",
                 keyboardType = KeyboardType.Uri,
             )
             Spacer(Modifier.height(10.dp))
@@ -651,14 +648,16 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     scope.launch {
                         runtimeBusy = true
                         val result = withContext(Dispatchers.IO) {
-                            GameInstaller.downloadRuntime(ctx, runtimeUrl) { state ->
-                                runtimeProgress = state
-                            }
+                            JreInstaller.downloadAndInstall(
+                                ctx,
+                                runtimeUrl,
+                                runtimeUrl.substringAfterLast('/').ifBlank { "jre.tar.xz" },
+                            ) { state -> runtimeProgress = state }
                         }
                         runtimeBusy = false
                         result
                             .onSuccess {
-                                runtimeMessage = "Runtime scaricato: ${formatMb(it.length())}"
+                                runtimeMessage = "Runtime pronto: ${it.absolutePath}"
                                 runtimeError = false
                                 refresh++
                             }

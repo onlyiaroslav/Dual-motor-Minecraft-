@@ -138,6 +138,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Decompressione XZ per gli archivi JRE .tar.xz (puro Java, nessuna deps).
+    implementation("org.tukaani:xz:1.9")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
 }

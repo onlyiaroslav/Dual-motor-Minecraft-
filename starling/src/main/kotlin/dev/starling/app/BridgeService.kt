@@ -87,9 +87,9 @@ class BridgeService : Service() {
                 }
             }
 
-            val jreLib = GameInstaller.effectiveRuntimeLib(this)
+            val jvmPath = JreInstaller.prepareEnv(this).getOrThrow()
             nativeStart(
-                jreLib.absolutePath,
+                jvmPath,
                 bridgeJar.absolutePath,
                 mods.absolutePath,
                 lut.absolutePath,

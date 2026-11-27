@@ -83,7 +83,9 @@ object GameInstaller {
     fun effectiveRuntimeLib(ctx: Context): File {
         val bundled = runtimeLib(ctx)
         if (bundled.exists()) return bundled
-        return File(gameDir(ctx), "runtime/libjvm.so")
+        // Memoria PRIVATA: da Android 10+ il dlopen dallo storage esterno è vietato.
+        return JreInstaller.findLibjvm(ctx)
+            ?: File(JreInstaller.runtimeDir(ctx), "libjvm.so")
     }
 
     fun bridgeJar(ctx: Context): File =
@@ -307,56 +309,6 @@ object GameInstaller {
         runtimeDir.mkdirs()
         versionDir.mkdirs()
         File(root, "mods").mkdirs()
-    }
-
-    /**
-     * Scarica il runtime Java (libjvm.so) da un URL, con avanzamento reale.
-     * Destinazione: minecraft/runtime/libjvm.so, usato da effectiveRuntimeLib.
-     */
-    fun downloadRuntime(
-        ctx: Context,
-        url: String,
-        onUpdate: (InstallState) -> Unit,
-    ): Result<File> = runCatching {
-        require(url.isNotBlank()) { "Inserisci l'URL del runtime Java" }
-        val dest = File(gameDir(ctx), "runtime/libjvm.so")
-        dest.parentFile?.mkdirs()
-
-        val total = runCatching {
-            (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 10_000
-                readTimeout = 15_000
-                instanceFollowRedirects = true
-            }.let { conn ->
-                val len = conn.contentLengthLong
-                conn.disconnect()
-                len
-            }
-        }.getOrDefault(0L).coerceAtLeast(0L)
-
-        var done = 0L
-        fun emit(phase: String, running: Boolean) {
-            onUpdate(
-                InstallState(
-                    running = running,
-                    percent = if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0,
-                    downloaded = done,
-                    total = total,
-                    phase = phase,
-                    detail = dest.name,
-                    ready = !running,
-                )
-            )
-        }
-
-        emit("Download runtime Java…", true)
-        download(url, dest) { chunk ->
-            done += chunk
-            emit("Download runtime Java…", true)
-        }
-        done = dest.length()
-        emit("Runtime Java pronto", false)
-        dest
     }
 
     // -----------------------------------------------------------------------

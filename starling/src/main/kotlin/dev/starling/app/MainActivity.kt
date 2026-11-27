@@ -159,20 +159,27 @@ class MainActivity : ComponentActivity() {
                                             phase = "Avvio in corso…",
                                             detail = "Avvio JVM e Minecraft ${GameInstaller.MC_VERSION}",
                                         )
+                                        var launchFailure: String? = null
                                         val started = withContext(Dispatchers.Default) {
                                             if (!nativeLibsLoaded) {
                                                 false
                                             } else {
-                                                runCatching {
+                                                try {
+                                                    // java.home + LD_LIBRARY_PATH sulla copia
+                                                    // privata, poi dlopen assoluto.
+                                                    val jvmPath = JreInstaller.prepareEnv(ctx).getOrThrow()
                                                     nativeStartGame(
-                                                        outcome.runtimeLib.absolutePath,
+                                                        jvmPath,
                                                         bridgeJar.absolutePath,
                                                         mods.absolutePath,
                                                         lut.absolutePath,
                                                         mapping.absolutePath,
                                                         ctx.cacheDir.absolutePath,
                                                     )
-                                                }.getOrDefault(false)
+                                                } catch (t: Throwable) {
+                                                    launchFailure = t.message ?: t.javaClass.simpleName
+                                                    false
+                                                }
                                             }
                                         }
                                         install = if (started) {
@@ -193,10 +200,10 @@ class MainActivity : ComponentActivity() {
                                                     "Librerie native non caricate:\n" +
                                                         (nativeLoadError ?: "libreria .so mancante nell'APK.")
                                                 } else {
-                                                    "Manca il runtime Java (libjvm.so, JRE " +
-                                                        "Android arm64). Vai in Impostazioni → " +
-                                                        "Runtime Java: caricalo dal telefono oppure " +
-                                                        "scaricalo da un URL. Non serve ricompilare l'APK."
+                                                    launchFailure
+                                                        ?: "Manca il runtime Java (JRE Android arm64). " +
+                                                            "Vai in Impostazioni → Runtime Java e carica " +
+                                                            "un archivio .tar.xz o .zip del JRE."
                                                 },
                                             )
                                         }
