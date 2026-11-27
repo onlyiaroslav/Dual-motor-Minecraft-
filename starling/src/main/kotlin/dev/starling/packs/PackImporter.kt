@@ -66,31 +66,44 @@ class PackImporter {
                         throw IllegalStateException("zip con troppe entry (> $MAX_ENTRIES)")
                     }
 
-                    val entryPath = target.resolve(entry.name).normalize()
-                    // zip-slip: l'entry non deve uscire dalla cartella del pack
-                    if (!entryPath.startsWith(target)) {
-                        throw IllegalStateException("entry zip fuori percorso: ${entry.name}")
-                    }
+                    // Normalizza il nome entry: alcuni zip usano "/" iniziale,
+                    // "./" o separatori Windows. Senza, resolve() produce un
+                    // percorso assoluto che esce dalla cartella (falso zip-slip).
+                    val rawName = entry.name
+                        .replace('\\', '/')
+                        .removePrefix("/")
+                        .removePrefix("./")
+                    val skip = rawName.isBlank() ||
+                        rawName.startsWith("__MACOSX/") ||
+                        rawName.endsWith(".DS_Store")
 
-                    if (entry.isDirectory) {
-                        Files.createDirectories(entryPath)
-                    } else {
-                        entryPath.parent?.let { Files.createDirectories(it) }
-                        var written = 0L
-                        Files.newOutputStream(entryPath).use { output ->
-                            val buffer = ByteArray(64 * 1024)
-                            while (true) {
-                                val read = zip.read(buffer)
-                                if (read <= 0) break
-                                written += read
-                                total += read
-                                if (written > MAX_ENTRY_BYTES) {
-                                    throw IllegalStateException("file troppo grande: ${entry.name}")
+                    if (!skip) {
+                        val entryPath = target.resolve(rawName).normalize()
+                        // zip-slip: l'entry non deve uscire dalla cartella del pack
+                        if (!entryPath.startsWith(target)) {
+                            throw IllegalStateException("entry zip fuori percorso: $rawName")
+                        }
+
+                        if (entry.isDirectory) {
+                            Files.createDirectories(entryPath)
+                        } else {
+                            entryPath.parent?.let { Files.createDirectories(it) }
+                            var written = 0L
+                            Files.newOutputStream(entryPath).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val read = zip.read(buffer)
+                                    if (read <= 0) break
+                                    written += read
+                                    total += read
+                                    if (written > MAX_ENTRY_BYTES) {
+                                        throw IllegalStateException("file troppo grande: $rawName")
+                                    }
+                                    if (total > MAX_TOTAL_BYTES) {
+                                        throw IllegalStateException("pack troppo grande (> 512 MB)")
+                                    }
+                                    output.write(buffer, 0, read)
                                 }
-                                if (total > MAX_TOTAL_BYTES) {
-                                    throw IllegalStateException("pack troppo grande (> 512 MB)")
-                                }
-                                output.write(buffer, 0, read)
                             }
                         }
                     }

@@ -143,6 +143,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var packMessage by remember { mutableStateOf<String?>(null) }
     var packError by remember { mutableStateOf(false) }
     var packBusy by remember { mutableStateOf(false) }
+    var installedPacks by remember { mutableStateOf<List<File>>(emptyList()) }
 
     // --- Runtime Java caricabile dall'utente (senza ricompilare l'APK) ----
     var runtimeMessage by remember { mutableStateOf<String?>(null) }
@@ -201,14 +202,19 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                             PackImporter().importZip(it, packsDir.toPath(), name, PACK_FORMAT)
                         }
                     } catch (e: Exception) {
-                        dev.starling.packs.Result.fail(e.message ?: "importazione fallita")
+                        dev.starling.packs.Result.fail(
+                            "${e.javaClass.simpleName}: ${e.message ?: "importazione fallita"}"
+                        )
                     }
                 }
                 packBusy = false
                 val gate = PackGate()
+                installedPacks = withContext(Dispatchers.IO) { listPacks(ctx) }
                 if (result.ok) {
                     gate.onExternalPackValid()
-                    packMessage = "Pack importato: ${result.packDir?.fileName}"
+                    val dir = result.packDir?.toFile()
+                    val files = dir?.walkTopDown()?.count { it.isFile } ?: 0
+                    packMessage = "Pack importato: ${result.packDir?.fileName} ($files file estratti)"
                     packError = false
                 } else {
                     // Pack scartato: nessun restart dei download (anti-loop).
@@ -218,6 +224,10 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        installedPacks = withContext(Dispatchers.IO) { listPacks(ctx) }
     }
 
     fun libraryPath(): String {
@@ -650,7 +660,16 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 text = "Importa pack",
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !packBusy,
-                onClick = { packPicker.launch(arrayOf("application/zip")) },
+                onClick = {
+                    packPicker.launch(
+                        arrayOf(
+                            "application/zip",
+                            "application/x-zip-compressed",
+                            "application/octet-stream",
+                            "*/*",
+                        )
+                    )
+                },
             )
             val currentPackMessage = packMessage
             if (currentPackMessage != null) {
@@ -661,6 +680,18 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     color = if (packError) DogeDanger else DogeSuccess,
                     fontSize = 12.sp,
                 )
+            }
+            if (installedPacks.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                DogeSectionTitle("Pack estratti")
+                Spacer(Modifier.height(6.dp))
+                installedPacks.forEach { dir ->
+                    DogeInfoRow(
+                        dir.name,
+                        if (File(dir, "pack.mcmeta").exists()) "pronto" else "senza mcmeta",
+                        if (File(dir, "pack.mcmeta").exists()) DogeSuccess else DogeTextSecondary,
+                    )
+                }
             }
         }
 
@@ -791,6 +822,14 @@ private fun describeAiState(state: String, endpoint: String): String = when (sta
     "not_ready" -> "AI attiva ma server non raggiungibile ($endpoint): fallback senza AI."
     "disarmed" -> "AI disattivata: conversione con sola libreria mapping.bin."
     else -> "Stato AI: $state"
+}
+
+/** Cartelle dei pack già estratti in resourcepacks/. */
+private fun listPacks(ctx: Context): List<File> {
+    val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "resourcepacks")
+    return dir.listFiles { file -> file.isDirectory }
+        ?.sortedBy { it.name.lowercase() }
+        ?: emptyList()
 }
 
 /** Nome visualizzato del file scelto (fallback sul path dell'Uri). */
