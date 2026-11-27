@@ -102,8 +102,9 @@ jobs:
           # Emetti l'errore come annotazione: leggibile via API anche senza login.
           if [ -f /tmp/gradle-build.log ]; then
             cp /tmp/gradle-build.log "$GITHUB_WORKSPACE/gradle-build.log"
-            msg=$(tail -80 /tmp/gradle-build.log | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/\r/%0D/g')
-            echo "::error title=Gradle build log::$msg"
+            enc() { sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/\r/%0D/g'; }
+            head -60 /tmp/gradle-build.log | enc | { read -r m; echo "::error title=Gradle log (inizio)::$m"; }
+            cat /tmp/gradle-build.log | enc | { read -r m; echo "::error title=Gradle log (completo)::$m"; }
           fi
 
       - name: Upload build log artifact
