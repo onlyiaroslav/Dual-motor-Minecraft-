@@ -99,6 +99,22 @@ jobs:
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Emetti l'errore come annotazione: leggibile via API anche senza login.
+          if [ -f /tmp/gradle-build.log ]; then
+            cp /tmp/gradle-build.log "$GITHUB_WORKSPACE/gradle-build.log"
+            msg=$(tail -80 /tmp/gradle-build.log | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/\r/%0D/g')
+            echo "::error title=Gradle build log::$msg"
+          fi
+
+      - name: Upload build log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
