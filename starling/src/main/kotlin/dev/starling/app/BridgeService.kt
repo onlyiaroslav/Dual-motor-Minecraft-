@@ -24,12 +24,23 @@ import java.io.File
 class BridgeService : Service() {
 
     companion object {
+        /** True se le librerie native sono state caricate senza errori. */
+        var nativeLibsLoaded: Boolean = false
+            private set
+
         init {
             // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
-            System.loadLibrary("bridge_jni")
-            System.loadLibrary("starling_jvm_host")
+            // Se una libreria manca o fallisce, NON facciamo crashare il
+            // servizio: onStartCommand si limita a fermarsi.
             // libjvm.so della JRE Android viene caricata con dlopen dall'host:
             // deve stare in nativeLibraryDir (jniLibs/arm64-v8a).
+            nativeLibsLoaded = try {
+                System.loadLibrary("bridge_jni")
+                System.loadLibrary("starling_jvm_host")
+                true
+            } catch (t: Throwable) {
+                false
+            }
         }
 
         @JvmStatic
@@ -43,9 +54,13 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!nativeLibsLoaded) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startForeground(1, buildNotification())
 
-        val base = getExternalFilesDir(null)!!
+        val base = getExternalFilesDir(null) ?: filesDir
         val mods = File(base, "mods").apply { mkdirs() }
         val lut = File(base, "lut").apply { mkdirs() }
         val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
@@ -85,7 +100,9 @@ class BridgeService : Service() {
     }
 
     override fun onDestroy() {
-        nativeStop()
+        if (nativeLibsLoaded) {
+            runCatching { nativeStop() }
+        }
         super.onDestroy()
     }
 

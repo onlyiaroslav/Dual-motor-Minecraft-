@@ -24,10 +24,21 @@ class MainActivity : ComponentActivity() {
         private const val DEFAULT_MODEL = "smollm2-360m-instruct-q4_k_m.gguf"
         private const val AI_ASSET_DIR = "ai"
 
+        /** True se le librerie native sono state caricate senza errori. */
+        var nativeLibsLoaded: Boolean = false
+            private set
+
         init {
             // Carica le librerie native (ordine: bridge Rust prima, poi host C++).
-            System.loadLibrary("bridge_jni")
-            System.loadLibrary("starling_jvm_host")
+            // Se una libreria manca o fallisce, NON facciamo crashare la UI:
+            // il pulsante Play resterà inerte finché il problema non è risolto.
+            nativeLibsLoaded = try {
+                System.loadLibrary("bridge_jni")
+                System.loadLibrary("starling_jvm_host")
+                true
+            } catch (t: Throwable) {
+                false
+            }
         }
 
         /**
@@ -61,7 +72,7 @@ class MainActivity : ComponentActivity() {
         val ctx = applicationContext
 
         // Percorsi identici a quelli usati da BridgeService (Scoped Storage OK).
-        val base = ctx.getExternalFilesDir(null)!!
+        val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         val mods = File(base, "mods").apply { mkdirs() }
         val lut = File(base, "lut").apply { mkdirs() }
         val bridgeDir = File(ctx.filesDir, "bridge").apply { mkdirs() }
@@ -94,14 +105,18 @@ class MainActivity : ComponentActivity() {
             DogeTheme {
                 MainScreen(
                     onStartGame = {
-                        nativeStartGame(
-                            jreLib.absolutePath,
-                            bridgeJar.absolutePath,
-                            mods.absolutePath,
-                            lut.absolutePath,
-                            mapping.absolutePath,
-                            ctx.cacheDir.absolutePath
-                        )
+                        if (nativeLibsLoaded) {
+                            runCatching {
+                                nativeStartGame(
+                                    jreLib.absolutePath,
+                                    bridgeJar.absolutePath,
+                                    mods.absolutePath,
+                                    lut.absolutePath,
+                                    mapping.absolutePath,
+                                    ctx.cacheDir.absolutePath
+                                )
+                            }
+                        }
                     }
                 )
             }

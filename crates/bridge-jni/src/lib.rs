@@ -31,7 +31,7 @@ use std::ffi::c_void;
 
 use jni::objects::{GlobalRef, JByteArray, JByteBuffer, JClass, JObject, JString, JValue};
 use jni::signature::{Primitive, ReturnType};
-use jni::sys::{jint, jlong, JNI_VERSION_1_8};
+use jni::sys::{jint, jlong, JNI_VERSION_1_6};
 use jni::{JNIEnv, JavaVM};
 
 use bridge_u8::{BridgeError, LookupTable, NativeAction, NativeExecutor};
@@ -267,5 +267,5 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativeDetach(
 /// Versione JNI richiesta dalla libreria.
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(_vm: JavaVM, _reserved: *mut c_void) -> jint {
-    JNI_VERSION_1_8
+    JNI_VERSION_1_6
 }
