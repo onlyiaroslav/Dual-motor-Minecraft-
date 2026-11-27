@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,7 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -170,7 +173,14 @@ private fun DogeTopBar(
                 .clickable { onAvatarClick() },
             contentAlignment = Alignment.Center,
         ) {
-            Text("🐶", fontSize = 24.sp)
+            Image(
+                painter = painterResource(R.drawable.doge_avatar),
+                contentDescription = "Profilo Doge",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+            )
         }
     }
 }
@@ -244,8 +254,9 @@ private fun HomeTab(
 
         Text(
             text = when {
-                install.error != null -> "Azione richiesta"
+                install.error != null -> "Avvio non riuscito"
                 install.running -> install.phase.ifBlank { "Preparazione…" }
+                install.ready -> "Gioco avviato"
                 else -> "Pronto per giocare"
             },
             style = MaterialTheme.typography.headlineMedium,
@@ -266,6 +277,31 @@ private fun HomeTab(
 
         if (install.running) {
             DownloadCard(install)
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (install.ready && install.error == null) {
+            DogeCard(accent = true) {
+                Text(
+                    "Gioco avviato",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = DogeSuccess,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    install.detail.ifBlank { "JVM headless attiva in-process." },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DogeTextSecondary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Il motore gira nello stesso processo (bridge Rust + JVM embedded): " +
+                        "non viene aperta un'altra Activity.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DogeTextSecondary,
+                    fontSize = 11.sp,
+                )
+            }
             Spacer(Modifier.height(12.dp))
         }
 

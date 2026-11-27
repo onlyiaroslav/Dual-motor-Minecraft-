@@ -49,6 +49,8 @@ jmethodID g_poll = nullptr;
 jclass g_bootstrap = nullptr;      // global ref
 jmethodID g_stop = nullptr;
 jlong g_handle = 0;
+// Ultimo errore di avvio, esposto alla UI per non fallire in silenzio.
+std::string g_last_error;
 
 // Callback registrata dal motore Rust: riceve gli ID azione risolti dalla LUT.
 using ActionCb = void (*)(const int32_t* ids, size_t count);
@@ -117,13 +119,16 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     preloadJreLibs(jreLib);
     g_jvm_lib = dlopen(jreLib.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (!g_jvm_lib) {
-        LOGE("dlopen libjvm fallita: %s\n", dlerror());
+        const char* err = dlerror();
+        g_last_error = std::string("dlopen libjvm fallita: ") + (err ? err : "errore sconosciuto");
+        LOGE("%s\n", g_last_error.c_str());
         return false;
     }
     using CreateVmFn = jint (*)(JavaVM**, void**, void*);
     auto create_vm = reinterpret_cast<CreateVmFn>(dlsym(g_jvm_lib, "JNI_CreateJavaVM"));
     if (!create_vm) {
-        LOGE("JNI_CreateJavaVM non trovata in libjvm\n");
+        g_last_error = "JNI_CreateJavaVM non trovata in libjvm.so (JRE non valida?)";
+        LOGE("%s\n", g_last_error.c_str());
         return false;
     }
 
@@ -165,8 +170,11 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     args.ignoreUnrecognized = JNI_FALSE;
 
     JNIEnv* jenv = nullptr;
-    if (create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args) != JNI_OK || !jenv) {
-        LOGE("JNI_CreateJavaVM fallita\n");
+    const jint vmRc = create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args);
+    if (vmRc != JNI_OK || !jenv) {
+        g_last_error = "JNI_CreateJavaVM fallita (rc=" + std::to_string(vmRc) +
+                       "): JRE incompleta o java.home errato";
+        LOGE("%s\n", g_last_error.c_str());
         return false;
     }
 
@@ -174,7 +182,8 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     //    jar reali, ring, attach, tick 20 TPS, EngineSink.
     jclass bootstrap = jenv->FindClass("dev/starling/bridge/JvmBootstrap");
     if (!bootstrap || jenv->ExceptionCheck()) {
-        LOGE("JvmBootstrap non trovata nel classpath\n");
+        g_last_error = "JvmBootstrap non trovata nel classpath (bridge-u8.jar)";
+        LOGE("%s\n", g_last_error.c_str());
         if (jenv->ExceptionCheck()) jenv->ExceptionClear();
         return false;
     }
@@ -191,7 +200,8 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     if (jenv->ExceptionCheck()) {
         jenv->ExceptionDescribe();
         jenv->ExceptionClear();
-        LOGE("JvmBootstrap.start fallita\n");
+        g_last_error = "JvmBootstrap.start fallita (mod/mapping non validi?)";
+        LOGE("%s\n", g_last_error.c_str());
         return false;
     }
     g_bootstrap = static_cast<jclass>(jenv->NewGlobalRef(bootstrap));
@@ -292,6 +302,12 @@ Java_dev_starling_app_BridgeService_nativeStart(
     return startJvmEmbedded(env, jreLib, classpath, mods, lut, mapping, tmp)
                ? JNI_TRUE
                : JNI_FALSE;
+}
+
+// Ultimo errore di avvio: la UI lo mostra invece di resettare in silenzio.
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_starling_app_MainActivity_nativeLastError(JNIEnv* env, jclass) {
+    return env->NewStringUTF(g_last_error.c_str());
 }
 
 // JNI per MainActivity (ART → avvio gioco diretto, stessa logica di BridgeService)

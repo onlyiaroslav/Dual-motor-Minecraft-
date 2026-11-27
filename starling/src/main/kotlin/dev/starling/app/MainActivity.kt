@@ -56,6 +56,10 @@ class MainActivity : ComponentActivity() {
          * Avvia il gioco: dlopen libjvm, JNI_CreateJavaVM, JvmBootstrap.start,
          * ring buffer, tick 20 TPS. Stessa logica di BridgeService.nativeStart.
          */
+        /** Ultimo errore del native host (dlopen / JNI_CreateJavaVM / bootstrap). */
+        @JvmStatic
+        external fun nativeLastError(): String
+
         @JvmStatic
         external fun nativeStartGame(
             jreLib: String,
@@ -179,6 +183,16 @@ class MainActivity : ComponentActivity() {
                                                 } catch (t: Throwable) {
                                                     launchFailure = t.message ?: t.javaClass.simpleName
                                                     false
+                                                }.also { ok ->
+                                                    if (!ok && launchFailure == null) {
+                                                        // false senza eccezione: chiede al native
+                                                        // host il motivo reale (dlopen, JVM, bootstrap).
+                                                        launchFailure = runCatching { nativeLastError() }
+                                                            .getOrNull()
+                                                            ?.ifBlank { null }
+                                                            ?: "Il native host ha rifiutato l'avvio " +
+                                                                "senza dettagli (vedi logcat: starling-jvm)."
+                                                    }
                                                 }
                                             }
                                         }
