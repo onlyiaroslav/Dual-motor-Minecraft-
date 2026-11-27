@@ -2,36 +2,40 @@ package dev.starling.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * Activity principale del launcher Doge Client.
  *
- * Il pulsante "Play" chiama [nativeStartGame], che avvia la JVM headless
- * in-process (stessa logica di BridgeService, condivisa via startJvmEmbedded
- * in starling_jvm_host.cpp). Nessun file Rust/JNI/HTTP è stato modificato.
+ * Il pulsante "Gioca" esegue [GameInstaller.ensureInstalled] (verifica file,
+ * runtime Java, librerie/asset con barra di avanzamento) e poi avvia la JVM
+ * headless in-process tramite [nativeStartGame].
  *
- * All'avvio, se l'utente ha abilitato l'auto-start nelle impostazioni, lancia
- * automaticamente il server AI locale (llama-server) su 127.0.0.1:8080
- * affinché la conversione mod con AI locale funzioni senza alcuna
- * configurazione manuale.
+ * All'avvio, se abilitato nelle impostazioni, lancia il server AI locale.
  */
 class MainActivity : ComponentActivity() {
 
     companion object {
-        private const val DEFAULT_SERVER_EXE = "llama-server"
-        private const val DEFAULT_MODEL = "smollm2-360m-instruct-q4_k_m.gguf"
-        private const val AI_ASSET_DIR = "ai"
-
         /** True se le librerie native sono state caricate senza errori. */
         var nativeLibsLoaded: Boolean = false
             private set
 
         init {
-            // Carica le librerie native (ordine: bridge Rust prima, poi host C++).
-            // Se una libreria manca o fallisce, NON facciamo crashare la UI:
-            // il pulsante Play resterà inerte finché il problema non è risolto.
+            // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
+            // Se una libreria manca o fallisce non crashiamo: la UI parte e il
+            // pulsante Gioca mostrerà un errore leggibile.
             nativeLibsLoaded = try {
                 System.loadLibrary("bridge_jni")
                 System.loadLibrary("starling_jvm_host")
@@ -44,7 +48,6 @@ class MainActivity : ComponentActivity() {
         /**
          * Avvia il gioco: dlopen libjvm, JNI_CreateJavaVM, JvmBootstrap.start,
          * ring buffer, tick 20 TPS. Stessa logica di BridgeService.nativeStart.
-         * Restituisce true se l'avvio riesce.
          */
         @JvmStatic
         external fun nativeStartGame(
@@ -59,27 +62,32 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // --- Avvio automatico server AI locale (zero-config) ---
-        val aiPrefs = getSharedPreferences("starling_settings", MODE_PRIVATE)
-        val aiAutoStart = aiPrefs.getBoolean("ai_auto_start_server", false)
-        if (aiAutoStart) {
-            val exe = aiPrefs.getString("ai_server_exe_path", DEFAULT_SERVER_EXE) ?: DEFAULT_SERVER_EXE
-            val model = aiPrefs.getString("ai_model_path", DEFAULT_MODEL) ?: DEFAULT_MODEL
-            startEmbeddedAiServer(exe, model)
-        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
 
         val ctx = applicationContext
+        val aiPrefs = getSharedPreferences("starling_settings", MODE_PRIVATE)
 
-        // Percorsi identici a quelli usati da BridgeService (Scoped Storage OK).
+        // --- Avvio automatico server AI locale (zero-config) ---------------
+        if (aiPrefs.getBoolean("ai_auto_start_server", false)) {
+            val exe = aiPrefs.getString("ai_server_exe_path", AiLocalServer.DEFAULT_SERVER_EXE)
+                ?: AiLocalServer.DEFAULT_SERVER_EXE
+            val model = aiPrefs.getString("ai_model_path", AiLocalServer.DEFAULT_MODEL)
+                ?: AiLocalServer.DEFAULT_MODEL
+            thread(name = "doge-ai-server") {
+                AiLocalServer.startIfNeeded(ctx, exe, model)
+            }
+        }
+
+        // --- Percorsi (identici a BridgeService: Scoped Storage OK) --------
         val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         val mods = File(base, "mods").apply { mkdirs() }
         val lut = File(base, "lut").apply { mkdirs() }
         val bridgeDir = File(ctx.filesDir, "bridge").apply { mkdirs() }
 
         // Classi del bridge per la JVM embedded (jar, NON dex).
-        // Se l'asset non è presente, non blocchiamo l'avvio della UI: il
-        // pulsante Play resterà senza effetto finché il jar non viene aggiunto.
         val bridgeJar = File(bridgeDir, "bridge-u8.jar")
         if (!bridgeJar.exists()) {
             runCatching {
@@ -99,74 +107,97 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val jreLib = File(ctx.applicationInfo.nativeLibraryDir, "libjvm.so")
-
         setContent {
             DogeTheme {
+                var account by remember { mutableStateOf(AccountStore.load(ctx)) }
+                var install by remember { mutableStateOf(InstallState()) }
+                val scope = rememberCoroutineScope()
+
                 MainScreen(
-                    onStartGame = {
-                        if (nativeLibsLoaded) {
-                            runCatching {
-                                nativeStartGame(
-                                    jreLib.absolutePath,
-                                    bridgeJar.absolutePath,
-                                    mods.absolutePath,
-                                    lut.absolutePath,
-                                    mapping.absolutePath,
-                                    ctx.cacheDir.absolutePath
-                                )
+                    account = account,
+                    onAccountChange = { updated ->
+                        account = updated
+                        AccountStore.save(ctx, updated)
+                    },
+                    nativeReady = nativeLibsLoaded,
+                    install = install,
+                    modsDir = mods,
+                    onPlay = {
+                        if (!install.running) {
+                            install = install.copy(error = null, ready = false)
+                            scope.launch {
+                                // 1. Verifica / download con progress reale.
+                                val outcome = withContext(Dispatchers.IO) {
+                                    GameInstaller.ensureInstalled(ctx) { state ->
+                                        install = state
+                                    }
+                                }
+
+                                when (outcome) {
+                                    is InstallOutcome.Failed -> {
+                                        install = install.copy(
+                                            running = false,
+                                            ready = false,
+                                            phase = "Preparazione non riuscita",
+                                            error = outcome.message,
+                                        )
+                                    }
+
+                                    is InstallOutcome.Ready -> {
+                                        // 2. Avvio JVM + gioco.
+                                        install = install.copy(
+                                            running = true,
+                                            percent = 100,
+                                            phase = "Avvio in corso…",
+                                            detail = "Avvio JVM e Minecraft ${GameInstaller.MC_VERSION}",
+                                        )
+                                        val started = withContext(Dispatchers.Default) {
+                                            if (!nativeLibsLoaded) {
+                                                false
+                                            } else {
+                                                runCatching {
+                                                    nativeStartGame(
+                                                        outcome.runtimeLib.absolutePath,
+                                                        bridgeJar.absolutePath,
+                                                        mods.absolutePath,
+                                                        lut.absolutePath,
+                                                        mapping.absolutePath,
+                                                        ctx.cacheDir.absolutePath,
+                                                    )
+                                                }.getOrDefault(false)
+                                            }
+                                        }
+                                        install = if (started) {
+                                            install.copy(
+                                                running = false,
+                                                ready = true,
+                                                percent = 100,
+                                                phase = "Gioco avviato",
+                                                detail = outcome.note,
+                                            )
+                                        } else {
+                                            install.copy(
+                                                running = false,
+                                                ready = false,
+                                                percent = 0,
+                                                phase = "Avvio non riuscito",
+                                                error = if (!nativeLibsLoaded) {
+                                                    "Librerie native non caricate: manca una " +
+                                                        "libreria .so nell'APK."
+                                                } else {
+                                                    "Runtime Java non disponibile o non " +
+                                                        "compatibile. Aggiungi libjvm.so in " +
+                                                        "jniLibs/arm64-v8a e reinstalla l'APK."
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
+                    },
                 )
             }
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Server AI locale embedded: avvio automatico (zero configurazione utente)
-    // -----------------------------------------------------------------------
-
-    /** Avvia il server AI locale come processo figlio se non è già in ascolto.
-     *  Cerca l'eseguibile e il modello negli asset (cartella ai) se non esistono
-     *  ancora nello storage privato dell'app. */
-    private fun startEmbeddedAiServer(exePath: String, modelPath: String) {
-        val exeFile = extractAssetIfNeeded(exePath, "$AI_ASSET_DIR/${exePath.split("/").last()}")
-        val modelFile = extractAssetIfNeeded(modelPath, "$AI_ASSET_DIR/${modelPath.split("/").last()}")
-
-        if (!exeFile.exists() || !modelFile.exists()) {
-            return // fallback: l'AI resta disattivata, nessun crash
-        }
-
-        try {
-            val pb = ProcessBuilder(
-                exeFile.absolutePath,
-                "-m", modelFile.absolutePath,
-                "--host", "127.0.0.1",
-                "--port", "8080",
-                "-c", "512"
-            )
-            pb.directory(filesDir)
-            pb.redirectErrorStream(true)
-            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            pb.start()
-        } catch (e: Exception) {
-            // Ignorato: fallback gestito da local-ai (server assente ⇒ AI disattivata)
-        }
-    }
-
-    /** Copia un asset nello storage privato se il file di destinazione non esiste. */
-    private fun extractAssetIfNeeded(path: String, assetName: String): File {
-        val dest = File(path)
-        if (dest.exists()) return dest
-        return try {
-            assets.open(assetName).use { input ->
-                dest.parentFile?.mkdirs()
-                input.copyTo(dest.outputStream())
-            }
-            dest
-        } catch (e: Exception) {
-            dest // resta inesistente, il chiamante gestisce l'errore
         }
     }
 }

@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tema neutro: i colori veri sono gestiti da DogeTheme in Compose (Material 3, dark di default). -->
-    <style name="Theme.DogeClient" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
+    <!-- Tema di avvio: scuro, senza action bar. I colori veri sono gestiti da
+         DogeTheme in Compose (Material 3, sempre dark). -->
+    <style name="Theme.DogeClient" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/doge_background</item>
+        <item name="android:colorBackground">@color/doge_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>

@@ -1,14 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Moneta Dogecoin: cerchio dorato con bordo, riflesso e "Ð" centrale. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Bordo esterno della moneta -->
     <path
-        android:fillColor="#F4A460"
-        android:pathData="M54,68 m-20,0 a20,17 0 1,0 40,0 a20,17 0 1,0 -40,0
-            M32,44 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0
-            M45,32 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0
-            M63,32 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0
-            M76,44 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
+        android:fillColor="#8F7A22"
+        android:pathData="M54,54 m-32,0 a32,32 0 1,0 64,0 a32,32 0 1,0 -64,0" />
+
+    <!-- Corpo dorato -->
+    <path
+        android:fillColor="#C2A633"
+        android:pathData="M54,54 m-28.5,0 a28.5,28.5 0 1,0 57,0 a28.5,28.5 0 1,0 -57,0" />
+
+    <!-- Faccia interna leggermente più chiara (profondità) -->
+    <path
+        android:fillColor="#CBAF3E"
+        android:pathData="M54,54 m-25,0 a25,25 0 1,0 50,0 a25,25 0 1,0 -50,0" />
+
+    <!-- Riflesso in alto -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.18"
+        android:pathData="M54,26 C41,26 30,34 26,46 C33,37 43,32 54,32 C65,32 75,37 82,46 C78,34 67,26 54,26 Z" />
+
+    <!-- "Ð" stilizzata: D con foro interno -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M44,36 H57 C68,36 75,43.5 75,54 C75,64.5 68,72 57,72 H44 Z
+            M51,43 H56.5 C63,43 68,47.5 68,54 C68,60.5 63,65 56.5,65 H51 Z" />
+
+    <!-- Barra orizzontale della "Ð" -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,50.5 H60 V57.5 H36 Z" />
 </vector>

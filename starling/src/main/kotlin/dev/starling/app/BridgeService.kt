@@ -114,7 +114,7 @@ class BridgeService : Service() {
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         return Notification.Builder(this, "bridge")
-            .setContentTitle("Starling — JVM headless attiva")
+            .setContentTitle("Doge Client — JVM headless attiva")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .build()
     }
