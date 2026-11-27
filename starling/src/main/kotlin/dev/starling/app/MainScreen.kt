@@ -102,6 +102,7 @@ fun MainScreen(
                         modsDir = modsDir,
                         onPlay = onPlay,
                         onOpenAccount = { showAccount = true },
+                        onOpenSettings = { selected = Screen.Settings },
                     )
                     Screen.Mods -> ModsContent()
                     Screen.Friends -> FriendsContent()
@@ -186,6 +187,7 @@ private fun HomeTab(
     modsDir: File,
     onPlay: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val modCount = remember(modsDir, install.ready) {
@@ -273,6 +275,7 @@ private fun HomeTab(
                 nativeReady = nativeReady,
                 technicalDetail = nativeError,
                 onRetry = onPlay,
+                onOpenSettings = onOpenSettings,
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -520,7 +523,10 @@ private fun ErrorCard(
     nativeReady: Boolean,
     technicalDetail: String?,
     onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
+    val ctx = LocalContext.current
+    val runtimePresent = remember { GameInstaller.effectiveRuntimeLib(ctx).exists() }
     DogeCard(accent = true) {
         Text(
             "Avvio non riuscito",
@@ -545,14 +551,22 @@ private fun ErrorCard(
         if (!nativeReady) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Suggerimento: verifica che libjvm.so e le librerie native siano " +
-                    "presenti in jniLibs/arm64-v8a e reinstalla l'APK.",
+                "Suggerimento: le librerie native non sono caricate. Verifica che " +
+                    "siano presenti in jniLibs/arm64-v8a e reinstalla l'APK.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = DogeTextSecondary,
                 fontSize = 12.sp,
             )
         }
         Spacer(Modifier.height(14.dp))
+        if (!runtimePresent) {
+            DogePrimaryButton(
+                text = "Carica runtime Java",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenSettings,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         DogeGhostButton(
             text = "Riprova",
             modifier = Modifier.fillMaxWidth(),

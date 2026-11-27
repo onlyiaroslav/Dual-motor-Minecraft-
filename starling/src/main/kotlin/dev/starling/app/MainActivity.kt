@@ -193,9 +193,10 @@ class MainActivity : ComponentActivity() {
                                                     "Librerie native non caricate:\n" +
                                                         (nativeLoadError ?: "libreria .so mancante nell'APK.")
                                                 } else {
-                                                    "Runtime Java non disponibile o non " +
-                                                        "compatibile. Aggiungi libjvm.so in " +
-                                                        "jniLibs/arm64-v8a e reinstalla l'APK."
+                                                    "Manca il runtime Java (libjvm.so, JRE " +
+                                                        "Android arm64). Vai in Impostazioni → " +
+                                                        "Runtime Java: caricalo dal telefono oppure " +
+                                                        "scaricalo da un URL. Non serve ricompilare l'APK."
                                                 },
                                             )
                                         }

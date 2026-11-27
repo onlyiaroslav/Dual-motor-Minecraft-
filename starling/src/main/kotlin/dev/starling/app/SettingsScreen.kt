@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -42,6 +43,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,6 +151,8 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var runtimeMessage by remember { mutableStateOf<String?>(null) }
     var runtimeError by remember { mutableStateOf(false) }
     var runtimeBusy by remember { mutableStateOf(false) }
+    var runtimeUrl by rememberSaveable { mutableStateOf("") }
+    var runtimeProgress by remember { mutableStateOf<InstallState?>(null) }
 
     val runtimePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -630,6 +634,61 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 enabled = !runtimeBusy,
                 onClick = { runtimePicker.launch(arrayOf("*/*")) },
             )
+            Spacer(Modifier.height(12.dp))
+            DogeTextField(
+                value = runtimeUrl,
+                onValueChange = { runtimeUrl = it },
+                label = "Oppure URL del runtime (libjvm.so)",
+                placeholder = "https://…/libjvm.so",
+                keyboardType = KeyboardType.Uri,
+            )
+            Spacer(Modifier.height(10.dp))
+            DogeGhostButton(
+                text = "Scarica runtime",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !runtimeBusy && runtimeUrl.isNotBlank(),
+                onClick = {
+                    scope.launch {
+                        runtimeBusy = true
+                        val result = withContext(Dispatchers.IO) {
+                            GameInstaller.downloadRuntime(ctx, runtimeUrl) { state ->
+                                runtimeProgress = state
+                            }
+                        }
+                        runtimeBusy = false
+                        result
+                            .onSuccess {
+                                runtimeMessage = "Runtime scaricato: ${formatMb(it.length())}"
+                                runtimeError = false
+                                refresh++
+                            }
+                            .onFailure {
+                                runtimeMessage = it.message ?: "Download del runtime fallito"
+                                runtimeError = true
+                            }
+                    }
+                },
+            )
+            val progress = runtimeProgress
+            if (progress != null && progress.running) {
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = { (progress.percent / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp),
+                    color = DogePrimary,
+                    trackColor = DogeOutline,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${progress.percent}% · ${formatMb(progress.downloaded)} / " +
+                        formatMb(progress.total),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DogeTextSecondary,
+                    fontSize = 11.sp,
+                )
+            }
             val currentRuntimeMessage = runtimeMessage
             if (currentRuntimeMessage != null) {
                 Spacer(Modifier.height(10.dp))
