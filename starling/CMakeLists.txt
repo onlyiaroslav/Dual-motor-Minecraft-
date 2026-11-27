@@ -20,13 +20,16 @@ find_library(log-lib log)
 target_link_libraries(starling_jvm_host ${log-lib} dl)
 
 # --- Libreria Rust (importata, buildata da cargo-ndk) -----------------------
+# ATTENZIONE: NON va linkata qui.
+# La cdylib Rust non ha SONAME: linkandola per percorso, il linker registra in
+# DT_NEEDED il percorso RELATIVO di build ("../../../../src/main/jniLibs/..."),
+# che a runtime non esiste → dlopen failed all'avvio dell'app.
+# L'host C++ non chiama simboli di bridge-jni (usa solo JNI FindClass/Call*),
+# quindi il link non serve. La presenza viene solo verificata a configure time.
 set(BRIDGE_JNI_SO
         "${CMAKE_CURRENT_SOURCE_DIR}/src/main/jniLibs/${ANDROID_ABI}/libbridge_jni.so")
 if(EXISTS "${BRIDGE_JNI_SO}")
-    add_library(bridge_jni SHARED IMPORTED)
-    set_target_properties(bridge_jni PROPERTIES IMPORTED_LOCATION "${BRIDGE_JNI_SO}")
-    # Link formale: registra la dipendenza runtime e verifica la presenza.
-    target_link_libraries(starling_jvm_host bridge_jni)
+    message(STATUS "libbridge_jni.so presente per ${ANDROID_ABI} (caricata da Kotlin)")
 else()
     message(WARNING "libbridge_jni.so non trovata per ${ANDROID_ABI}: "
             "esegui prima il task Gradle cargoNdkBuild")

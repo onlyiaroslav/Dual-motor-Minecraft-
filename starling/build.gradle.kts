@@ -73,6 +73,12 @@ android {
 val cargoNdkBuildBridge by tasks.registering(Exec::class) {
     // I task girano dalla root del repository: lì c'è Cargo.toml.
     workingDir = rootProject.projectDir
+    // SONAME esplicito: senza, una cdylib Rust linkata da CMake registra in
+    // DT_NEEDED il percorso relativo di build, irreperibile a runtime.
+    environment(
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS",
+        "-C link-arg=-Wl,-soname,libbridge_jni.so"
+    )
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
@@ -86,6 +92,10 @@ val cargoNdkBuildBridge by tasks.registering(Exec::class) {
 // Usa la feature "jni" per esportare i simboli JNI verso AiConverterBridge.java.
 val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
     workingDir = rootProject.projectDir
+    environment(
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS",
+        "-C link-arg=-Wl,-soname,libmod_converter.so"
+    )
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
@@ -100,6 +110,10 @@ val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
 // schermata Amici crasha a runtime.
 val cargoNdkBuildSocial by tasks.registering(Exec::class) {
     workingDir = rootProject.projectDir
+    environment(
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS",
+        "-C link-arg=-Wl,-soname,libstarling_social.so"
+    )
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",

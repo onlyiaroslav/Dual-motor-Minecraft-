@@ -348,7 +348,10 @@ object GameInstaller {
     // HTTP / IO
     // -----------------------------------------------------------------------
     private fun download(url: String, dest: File, onChunk: (Long) -> Unit) {
-        val tmp = File(dest.parentFile, dest.name + ".part")
+        val parent = dest.parentFile ?: dest.absoluteFile.parentFile
+        requireNotNull(parent) { "Percorso di destinazione senza cartella: ${dest.path}" }
+        parent.mkdirs()
+        val tmp = File(parent, dest.name + ".part")
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 30_000

@@ -37,7 +37,8 @@ class TexturePackImporter(private val activity: ComponentActivity) {
     private val core = PackImporter()
     private val gate = PackGate()
     private val packsDir =
-        File(activity.getExternalFilesDir(null), "resourcepacks").apply { mkdirs() }
+        File(activity.getExternalFilesDir(null) ?: activity.filesDir, "resourcepacks")
+            .apply { mkdirs() }
 
     private val picker =
         activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->

@@ -52,6 +52,12 @@ data class Account(
     val microsoft: Boolean = false,
 )
 
+/**
+ * Client ID pubblico usato dai launcher Minecraft per la pagina di login
+ * Microsoft: l'utente non deve registrare nulla su Azure.
+ */
+const val MICROSOFT_CLIENT_ID = "00000000402b5328"
+
 object AccountStore {
     private const val PREFS = "starling_account"
     private const val KEY_NICK = "nickname"
@@ -80,7 +86,9 @@ object AccountStore {
 
     fun clientId(ctx: Context): String =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_CLIENT_ID, "").orEmpty()
+            .getString(KEY_CLIENT_ID, MICROSOFT_CLIENT_ID)
+            ?.ifBlank { MICROSOFT_CLIENT_ID }
+            ?: MICROSOFT_CLIENT_ID
 
     fun setClientId(ctx: Context, value: String) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -99,10 +107,8 @@ fun AccountScreen(
 ) {
     val ctx = LocalContext.current
     var draft by rememberSaveable { mutableStateOf(account.nickname) }
-    var clientId by rememberSaveable { mutableStateOf(AccountStore.clientId(ctx)) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var msDialog by rememberSaveable { mutableStateOf(false) }
-    var msMissingDialog by rememberSaveable { mutableStateOf(false) }
 
     DogeScreenBackground {
         Column(
@@ -250,39 +256,24 @@ fun AccountScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Apri il login Microsoft nel browser. Serve un Client ID Azure " +
-                        "(app \"personal Microsoft accounts\") configurato per questa build.",
+                    "Ti porta alla pagina di login Microsoft: accedi con la tua email " +
+                        "e password, poi torna qui. Nessuna configurazione richiesta.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = DogeTextSecondary,
                 )
-                Spacer(Modifier.height(12.dp))
-                DogeTextField(
-                    value = clientId,
-                    onValueChange = {
-                        clientId = it
-                        AccountStore.setClientId(ctx, it)
-                    },
-                    label = "Client ID Azure",
-                    placeholder = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-                    keyboardType = KeyboardType.Ascii,
-                )
-                Spacer(Modifier.height(12.dp))
-                DogeGhostButton(
+                Spacer(Modifier.height(14.dp))
+                DogePrimaryButton(
                     text = "Accedi con Microsoft",
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        if (clientId.isBlank()) {
-                            msMissingDialog = true
-                        } else {
-                            openMicrosoftLogin(ctx, clientId, draft)
-                            msDialog = true
-                        }
+                        openMicrosoftLogin(ctx, AccountStore.clientId(ctx))
+                        msDialog = true
                     },
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Nota: la verifica del token richiede il backend di autenticazione. " +
-                        "Senza di esso il profilo Microsoft resta locale e non verificato.",
+                    "Il login avviene sul sito Microsoft: il launcher non vede né " +
+                        "salva la tua password.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = DogeTextSecondary,
                     fontSize = 12.sp,
@@ -313,22 +304,6 @@ fun AccountScreen(
             Spacer(Modifier.height(28.dp))
         }
 
-        if (msMissingDialog) {
-            DogeDialog(
-                title = "Client ID mancante",
-                onDismiss = { msMissingDialog = false },
-                confirmText = "Ho capito",
-                onConfirm = { msMissingDialog = false },
-            ) {
-                Text(
-                    "Per aprire il login Microsoft serve un Client ID Azure registrato " +
-                        "come app desktop. Inseriscilo nel campo qui sopra, poi riprova.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DogeTextSecondary,
-                )
-            }
-        }
-
         if (msDialog) {
             DogeDialog(
                 title = "Accesso Microsoft",
@@ -353,7 +328,7 @@ fun AccountScreen(
     }
 }
 
-private fun openMicrosoftLogin(ctx: Context, clientId: String, nickname: String) {
+private fun openMicrosoftLogin(ctx: Context, clientId: String) {
     val redirect = "https://login.live.com/oauth20_desktop.srf"
     val url = buildString {
         append("https://login.live.com/oauth20_authorize.srf")
@@ -362,9 +337,6 @@ private fun openMicrosoftLogin(ctx: Context, clientId: String, nickname: String)
         append("&scope=").append(URLEncoder.encode("XboxLive.signin offline_access", "UTF-8"))
         append("&redirect_uri=").append(Uri.encode(redirect))
         append("&prompt=select_account")
-        if (nickname.isNotBlank()) {
-            append("&login_hint=").append(Uri.encode(nickname))
-        }
     }
     runCatching {
         ctx.startActivity(

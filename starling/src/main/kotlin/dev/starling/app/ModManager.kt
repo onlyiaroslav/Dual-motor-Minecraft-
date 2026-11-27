@@ -65,11 +65,23 @@ object ModManager {
 
     /** Copia un .jar scelto con il document picker nella cartella mods. */
     fun import(ctx: Context, uri: Uri): Result<File> = runCatching {
-        val name = displayName(ctx, uri)
-        if (!name.endsWith(".jar", ignoreCase = true)) {
+        val rawName = displayName(ctx, uri)
+        if (!rawName.endsWith(".jar", ignoreCase = true)) {
             throw IllegalStateException("Il file selezionato non è un .jar")
         }
-        val dest = File(modsDir(ctx), name)
+        // Nome sanificato: niente separatori o ".." (path traversal fuori da mods/).
+        val safeName = rawName.substringAfterLast('/').substringAfterLast('\\')
+            .replace(Regex("[^A-Za-z0-9._ -]"), "_")
+            .trim()
+            .take(96)
+        if (safeName.isBlank() || !safeName.endsWith(".jar", ignoreCase = true)) {
+            throw IllegalStateException("Nome del file non valido")
+        }
+        val dir = modsDir(ctx)
+        val dest = File(dir, safeName)
+        if (!dest.canonicalPath.startsWith(dir.canonicalPath + File.separator)) {
+            throw IllegalStateException("Percorso di destinazione non valido")
+        }
         ctx.contentResolver.openInputStream(uri).use { input ->
             requireNotNull(input) { "Impossibile leggere il file selezionato" }
             dest.outputStream().use { output -> input.copyTo(output) }

@@ -58,39 +58,47 @@ class BridgeService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(1, buildNotification())
 
-        val base = getExternalFilesDir(null) ?: filesDir
-        val mods = File(base, "mods").apply { mkdirs() }
-        val lut = File(base, "lut").apply { mkdirs() }
-        val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
+        // Qualsiasi fallimento (asset mancante, runtime assente, JNI che lancia)
+        // deve fermare il servizio, non crashare l'app.
+        val started = runCatching {
+            startForeground(1, buildNotification())
 
-        // Classi del bridge per la JVM embedded (jar, NON dex).
-        val bridgeJar = File(bridgeDir, "bridge-u8.jar")
-        assets.open("bridge-u8.jar").use { input ->
-            bridgeJar.outputStream().use { input.copyTo(it) }
-        }
+            val base = getExternalFilesDir(null) ?: filesDir
+            val mods = File(base, "mods").apply { mkdirs() }
+            val lut = File(base, "lut").apply { mkdirs() }
+            val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
 
-        // mapping.bin: generato OFFLINE (tool di analisi). Se assente, si usa
-        // il default impacchettato negli asset; le mod senza mapping restano
-        // in coda di analisi offline (ModRegistry.scan), mai analizzate qui.
-        val mapping = File(lut, "mapping.bin")
-        if (!mapping.exists()) {
-            assets.open("mapping.bin").use { input ->
-                mapping.outputStream().use { input.copyTo(it) }
+            // Classi del bridge per la JVM embedded (jar, NON dex).
+            val bridgeJar = File(bridgeDir, "bridge-u8.jar")
+            if (!bridgeJar.exists()) {
+                assets.open("bridge-u8.jar").use { input ->
+                    bridgeJar.outputStream().use { input.copyTo(it) }
+                }
             }
-        }
 
-        val jreLib = File(applicationInfo.nativeLibraryDir, "libjvm.so")
-        val ok = nativeStart(
-            jreLib.absolutePath,
-            bridgeJar.absolutePath,
-            mods.absolutePath,
-            lut.absolutePath,
-            mapping.absolutePath,
-            cacheDir.absolutePath
-        )
-        if (!ok) {
+            // mapping.bin: generato OFFLINE (tool di analisi). Se assente, si usa
+            // il default impacchettato negli asset; le mod senza mapping restano
+            // in coda di analisi offline (ModRegistry.scan), mai analizzate qui.
+            val mapping = File(lut, "mapping.bin")
+            if (!mapping.exists()) {
+                assets.open("mapping.bin").use { input ->
+                    mapping.outputStream().use { input.copyTo(it) }
+                }
+            }
+
+            val jreLib = GameInstaller.effectiveRuntimeLib(this)
+            nativeStart(
+                jreLib.absolutePath,
+                bridgeJar.absolutePath,
+                mods.absolutePath,
+                lut.absolutePath,
+                mapping.absolutePath,
+                cacheDir.absolutePath
+            )
+        }.getOrDefault(false)
+
+        if (!started) {
             stopSelf()
             return START_NOT_STICKY
         }
