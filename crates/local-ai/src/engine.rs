@@ -15,7 +15,7 @@ use std::thread;
 use std::time::Instant;
 
 use crate::backend::{
-    AiBackend, AiBackendError, EmbeddedServerConfig, HttpAiBackend,
+    AiBackend, AiBackendError, EmbeddedHttpBackend, EmbeddedServerConfig, HttpAiBackend,
     DEFAULT_ENDPOINT,
 };
 use bridge_u8::NativeAction;
