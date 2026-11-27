@@ -96,6 +96,39 @@ jobs:
           echo "BUILD_EXIT_CODE=$code"
           exit $code
 
+      # Diagnostica non bloccante: dice QUALI .so finiscono nell'APK e quali
+      # dipendenze ELF hanno. Serve a capire perché System.loadLibrary fallisce.
+      - name: Diagnostica librerie native
+        if: always()
+        run: |
+          set +e
+          SDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          {
+            echo ""
+            echo "===== DIAGNOSTICA LIBRERIE NATIVE ====="
+            echo "--- jniLibs (cargo-ndk) ---"
+            ls -la starling/src/main/jniLibs/arm64-v8a/ 2>&1
+            echo "--- .so da CMake ---"
+            find starling/build -name '*.so' 2>/dev/null | head -20
+            APK=$(ls starling/build/outputs/apk/debug/*.apk 2>/dev/null | head -1)
+            echo "--- APK: ${APK:-nessuno} ---"
+            if [ -n "$APK" ]; then
+              unzip -l "$APK" | grep -E '\.so' || echo "NESSUNA .so NELL'APK"
+            fi
+            echo "--- dipendenze ELF (DT_NEEDED / SONAME) ---"
+            READELF=$(ls "$SDK_HOME"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf 2>/dev/null | head -1)
+            for so in starling/src/main/jniLibs/arm64-v8a/*.so $(find starling/build -name 'libstarling_jvm_host.so' 2>/dev/null | head -1); do
+              [ -f "$so" ] || continue
+              echo "## $so"
+              if [ -n "$READELF" ]; then
+                "$READELF" -d "$so" 2>&1 | grep -E 'NEEDED|SONAME' || true
+              fi
+            done
+            echo "===== FINE DIAGNOSTICA ====="
+          } >> /tmp/gradle-build.log 2>&1
+          tail -50 /tmp/gradle-build.log
+          exit 0
+
       - name: Write build log to run summary
         if: always()
         run: |

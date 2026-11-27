@@ -74,6 +74,7 @@ fun MainScreen(
     account: Account,
     onAccountChange: (Account) -> Unit,
     nativeReady: Boolean,
+    nativeError: String? = null,
     install: InstallState,
     onPlay: () -> Unit,
     modsDir: File,
@@ -96,6 +97,7 @@ fun MainScreen(
                     Screen.Home -> HomeTab(
                         account = account,
                         nativeReady = nativeReady,
+                        nativeError = nativeError,
                         install = install,
                         modsDir = modsDir,
                         onPlay = onPlay,
@@ -179,6 +181,7 @@ private fun DogeTopBar(
 private fun HomeTab(
     account: Account,
     nativeReady: Boolean,
+    nativeError: String?,
     install: InstallState,
     modsDir: File,
     onPlay: () -> Unit,
@@ -265,7 +268,12 @@ private fun HomeTab(
         }
 
         if (install.error != null) {
-            ErrorCard(message = install.error, nativeReady = nativeReady, onRetry = onPlay)
+            ErrorCard(
+                message = install.error,
+                nativeReady = nativeReady,
+                technicalDetail = nativeError,
+                onRetry = onPlay,
+            )
             Spacer(Modifier.height(12.dp))
         }
 
@@ -298,6 +306,15 @@ private fun HomeTab(
                     color = DogeTextSecondary,
                     fontSize = 12.sp,
                 )
+                if (nativeError != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        nativeError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DogeDanger,
+                        fontSize = 11.sp,
+                    )
+                }
             }
         }
 
@@ -498,7 +515,12 @@ private fun DownloadCard(install: InstallState) {
 }
 
 @Composable
-private fun ErrorCard(message: String, nativeReady: Boolean, onRetry: () -> Unit) {
+private fun ErrorCard(
+    message: String,
+    nativeReady: Boolean,
+    technicalDetail: String?,
+    onRetry: () -> Unit,
+) {
     DogeCard(accent = true) {
         Text(
             "Avvio non riuscito",
@@ -511,6 +533,15 @@ private fun ErrorCard(message: String, nativeReady: Boolean, onRetry: () -> Unit
             style = MaterialTheme.typography.bodyMedium,
             color = DogeTextSecondary,
         )
+        if (technicalDetail != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                technicalDetail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = DogeDanger,
+                fontSize = 11.sp,
+            )
+        }
         if (!nativeReady) {
             Spacer(Modifier.height(8.dp))
             Text(

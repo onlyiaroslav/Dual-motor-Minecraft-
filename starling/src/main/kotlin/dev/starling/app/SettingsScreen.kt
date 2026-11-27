@@ -144,6 +144,44 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var packError by remember { mutableStateOf(false) }
     var packBusy by remember { mutableStateOf(false) }
 
+    // --- Runtime Java caricabile dall'utente (senza ricompilare l'APK) ----
+    var runtimeMessage by remember { mutableStateOf<String?>(null) }
+    var runtimeError by remember { mutableStateOf(false) }
+    var runtimeBusy by remember { mutableStateOf(false) }
+
+    val runtimePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runtimeBusy = true
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val dest = File(GameInstaller.gameDir(ctx), "runtime/libjvm.so")
+                        dest.parentFile?.mkdirs()
+                        val input = ctx.contentResolver.openInputStream(uri)
+                            ?: throw IllegalStateException("impossibile aprire il file selezionato")
+                        input.use { source ->
+                            dest.outputStream().use { output -> source.copyTo(output) }
+                        }
+                        dest
+                    }
+                }
+                runtimeBusy = false
+                result
+                    .onSuccess {
+                        runtimeMessage = "Runtime caricato: ${formatMb(it.length())} in ${it.absolutePath}"
+                        runtimeError = false
+                        refresh++
+                    }
+                    .onFailure {
+                        runtimeMessage = it.message ?: "Caricamento runtime fallito"
+                        runtimeError = true
+                    }
+            }
+        }
+    }
+
     val packPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -552,6 +590,46 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 color = DogeTextSecondary,
                 fontSize = 11.sp,
             )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // --- Runtime Java --------------------------------------------------
+        DogeCard {
+            DogeSectionTitle("Runtime Java")
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Il gioco embedded usa una JRE Android arm64. Se libjvm.so non è " +
+                    "impacchettato nell'APK puoi caricarlo qui: viene usato il percorso " +
+                    "minecraft/runtime/libjvm.so.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = DogeTextSecondary,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            DogeInfoRow(
+                "Runtime attivo",
+                if (runtime.exists()) formatMb(runtime.length()) else "mancante",
+                if (runtime.exists()) DogeSuccess else DogeDanger,
+            )
+            DogeInfoRow("Percorso", runtime.absolutePath)
+            Spacer(Modifier.height(12.dp))
+            DogePrimaryButton(
+                text = "Carica libjvm.so",
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !runtimeBusy,
+                onClick = { runtimePicker.launch(arrayOf("*/*")) },
+            )
+            val currentRuntimeMessage = runtimeMessage
+            if (currentRuntimeMessage != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    currentRuntimeMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (runtimeError) DogeDanger else DogeSuccess,
+                    fontSize = 12.sp,
+                )
+            }
         }
 
         Spacer(Modifier.height(14.dp))

@@ -32,17 +32,24 @@ class MainActivity : ComponentActivity() {
         var nativeLibsLoaded: Boolean = false
             private set
 
+        /** Dettaglio del fallimento (quale libreria e messaggio del linker). */
+        var nativeLoadError: String? = null
+            private set
+
         init {
             // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
             // Se una libreria manca o fallisce non crashiamo: la UI parte e il
-            // pulsante Gioca mostrerà un errore leggibile.
-            nativeLibsLoaded = try {
-                System.loadLibrary("bridge_jni")
-                System.loadLibrary("starling_jvm_host")
-                true
-            } catch (t: Throwable) {
-                false
+            // pulsante Gioca mostra QUALE libreria fallisce e perché.
+            val errors = mutableListOf<String>()
+            for (lib in listOf("bridge_jni", "starling_jvm_host")) {
+                try {
+                    System.loadLibrary(lib)
+                } catch (t: Throwable) {
+                    errors += "$lib → ${t.message ?: t.javaClass.simpleName}"
+                }
             }
+            nativeLibsLoaded = errors.isEmpty()
+            nativeLoadError = if (errors.isEmpty()) null else errors.joinToString("\n")
         }
 
         /**
@@ -120,6 +127,7 @@ class MainActivity : ComponentActivity() {
                         AccountStore.save(ctx, updated)
                     },
                     nativeReady = nativeLibsLoaded,
+                    nativeError = nativeLoadError,
                     install = install,
                     modsDir = mods,
                     onPlay = {
@@ -182,8 +190,8 @@ class MainActivity : ComponentActivity() {
                                                 percent = 0,
                                                 phase = "Avvio non riuscito",
                                                 error = if (!nativeLibsLoaded) {
-                                                    "Librerie native non caricate: manca una " +
-                                                        "libreria .so nell'APK."
+                                                    "Librerie native non caricate:\n" +
+                                                        (nativeLoadError ?: "libreria .so mancante nell'APK.")
                                                 } else {
                                                     "Runtime Java non disponibile o non " +
                                                         "compatibile. Aggiungi libjvm.so in " +
