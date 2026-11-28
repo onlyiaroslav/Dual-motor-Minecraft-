@@ -1,0 +1,531 @@
+ANDROID_HOME=/usr/local/lib/android/sdk
+ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/27.0.12077973
+total 24
+drwxrwxrwx  6 root   root   4096 Nov 28 08:56 .
+drwxrwxrwx 11 root   root   4096 Nov 28 08:55 ..
+drwxr-xr-x 11 runner runner 4096 Nov 28 08:56 27.0.12077973
+drwxrwxrwx 11 root   root   4096 Nov 22 21:39 27.3.13750724
+drwxrwxrwx 11 root   root   4096 Nov 22 21:38 29.0.14206865
+drwxrwxrwx 10 root   root   4096 Nov 22 21:38 30.0.16248370
+openjdk version "17.0.21.1" 2026-11-17
+OpenJDK Runtime Environment Temurin-17.0.21.1+2 (build 17.0.21.1+2)
+OpenJDK 64-Bit Server VM Temurin-17.0.21.1+2 (build 17.0.21.1+2, mixed mode, sharing)
+cargo-ndk 4.1.2
+
+------------------------------------------------------------
+Gradle 8.9
+------------------------------------------------------------
+
+Build time:    2024-07-11 14:37:41 UTC
+Revision:      d536ef36a19186ccc596d8817123e5445f30fef8
+
+Kotlin:        1.9.23
+Groovy:        3.0.21
+Ant:           Apache Ant(TM) version 1.10.13 compiled on January 4 2023
+Launcher JVM:  17.0.21.1 (Eclipse Adoptium 17.0.21.1+2)
+Daemon JVM:    /usr/lib/jvm/temurin-17-jdk-amd64 (no JDK specified, using current Java home)
+OS:            Linux 7.0.0-1020-azure amd64
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :starling:cargoNdkBuildBridge
+    Building arm64-v8a (aarch64-linux-android)
+    Updating `ustc` index
+ Downloading crates ...
+  Downloaded cfg-if v1.0.5 (registry `ustc`)
+  Downloaded cesu8 v1.1.0 (registry `ustc`)
+  Downloaded bytes v1.12.2 (registry `ustc`)
+  Downloaded combine v4.6.9 (registry `ustc`)
+  Downloaded jni-sys v0.3.1 (registry `ustc`)
+  Downloaded jni-sys-macros v0.4.1 (registry `ustc`)
+  Downloaded jni-sys v0.4.1 (registry `ustc`)
+  Downloaded jni v0.21.1 (registry `ustc`)
+  Downloaded log v0.4.35 (registry `ustc`)
+  Downloaded proc-macro2 v1.0.107 (registry `ustc`)
+  Downloaded quote v1.0.47 (registry `ustc`)
+  Downloaded same-file v1.0.6 (registry `ustc`)
+  Downloaded thiserror v1.0.69 (registry `ustc`)
+  Downloaded thiserror-impl v1.0.69 (registry `ustc`)
+  Downloaded unicode-ident v1.0.27 (registry `ustc`)
+  Downloaded walkdir v2.5.1 (registry `ustc`)
+  Downloaded memchr v2.8.3 (registry `ustc`)
+  Downloaded syn v2.0.119 (registry `ustc`)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling thiserror v1.0.69
+   Compiling jni-sys v0.3.1
+   Compiling memchr v2.8.3
+   Compiling bytes v1.12.2
+   Compiling cfg-if v1.0.5
+   Compiling cesu8 v1.1.0
+   Compiling log v0.4.35
+   Compiling bridge-u8 v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/bridge-u8)
+   Compiling combine v4.6.9
+   Compiling syn v2.0.119
+   Compiling jni-sys-macros v0.4.1
+   Compiling thiserror-impl v1.0.69
+   Compiling jni-sys v0.4.1
+   Compiling jni v0.21.1
+   Compiling bridge-jni v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/bridge-jni)
+    Finished `release` profile [optimized] target(s) in 27.94s
+     Copying libraries to /home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/starling/src/main/jniLibs
+
+> Task :starling:cargoNdkBuildModConverter
+    Building arm64-v8a (aarch64-linux-android)
+ Downloading crates ...
+  Downloaded adler2 v2.0.1 (registry `ustc`)
+  Downloaded atomic-waker v1.1.2 (registry `ustc`)
+  Downloaded bitflags v2.13.2 (registry `ustc`)
+  Downloaded cfg_aliases v0.2.2 (registry `ustc`)
+  Downloaded chacha20 v0.10.2 (registry `ustc`)
+  Downloaded zeroize v1.9.2 (registry `ustc`)
+  Downloaded cpufeatures v0.3.1 (registry `ustc`)
+  Downloaded crc32fast v1.5.6 (registry `ustc`)
+  Downloaded displaydoc v0.2.7 (registry `ustc`)
+  Downloaded base64 v0.22.1 (registry `ustc`)
+  Downloaded base64 v0.23.1 (registry `ustc`)
+  Downloaded find-msvc-tools v0.1.15 (registry `ustc`)
+  Downloaded form_urlencoded v1.2.3 (registry `ustc`)
+  Downloaded futures-channel v0.3.34 (registry `ustc`)
+  Downloaded futures-core v0.3.34 (registry `ustc`)
+  Downloaded futures-sink v0.3.34 (registry `ustc`)
+  Downloaded futures-io v0.3.34 (registry `ustc`)
+  Downloaded futures-task v0.3.34 (registry `ustc`)
+  Downloaded getrandom v0.2.17 (registry `ustc`)
+  Downloaded getrandom v0.4.3 (registry `ustc`)
+  Downloaded http-body v1.1.0 (registry `ustc`)
+  Downloaded http-body-util v0.1.5 (registry `ustc`)
+  Downloaded httparse v1.10.1 (registry `ustc`)
+  Downloaded hyper-rustls v0.27.10 (registry `ustc`)
+  Downloaded icu_provider v2.4.0 (registry `ustc`)
+  Downloaded idna_adapter v1.2.2 (registry `ustc`)
+  Downloaded ipnet v2.12.2 (registry `ustc`)
+  Downloaded itoa v1.0.19 (registry `ustc`)
+  Downloaded zerovec-derive v0.11.7 (registry `ustc`)
+  Downloaded cc v1.11.3 (registry `ustc`)
+  Downloaded flate2 v1.1.11 (registry `ustc`)
+  Downloaded http v1.5.0 (registry `ustc`)
+  Downloaded futures-util v0.3.34 (registry `ustc`)
+  Downloaded hyper-util v0.1.21 (registry `ustc`)
+  Downloaded icu_collections v2.4.0 (registry `ustc`)
+  Downloaded icu_locale_core v2.4.0 (registry `ustc`)
+  Downloaded icu_normalizer_data v2.4.0 (registry `ustc`)
+  Downloaded icu_properties v2.4.0 (registry `ustc`)
+  Downloaded hyper v1.13.0 (registry `ustc`)
+  Downloaded zmij v1.0.23 (registry `ustc`)
+  Downloaded icu_normalizer v2.4.0 (registry `ustc`)
+  Downloaded litemap v0.8.3 (registry `ustc`)
+  Downloaded idna v1.1.0 (registry `ustc`)
+  Downloaded lru-slab v0.1.3 (registry `ustc`)
+  Downloaded icu_properties_data v2.4.0 (registry `ustc`)
+  Downloaded libc v0.2.191 (registry `ustc`)
+  Downloaded zerotrie v0.2.5 (registry `ustc`)
+  Downloaded once_cell v1.21.4 (registry `ustc`)
+  Downloaded percent-encoding v2.3.2 (registry `ustc`)
+  Downloaded potential_utf v0.1.6 (registry `ustc`)
+  Downloaded pin-project-lite v0.2.18 (registry `ustc`)
+  Downloaded quinn-udp v0.5.16 (registry `ustc`)
+  Downloaded rand_core v0.10.1 (registry `ustc`)
+  Downloaded rand_pcg v0.10.3 (registry `ustc`)
+  Downloaded rustc-hash v2.1.3 (registry `ustc`)
+  Downloaded rustls-pki-types v1.16.0 (registry `ustc`)
+  Downloaded ryu v1.0.23 (registry `ustc`)
+  Downloaded serde_core v1.0.229 (registry `ustc`)
+  Downloaded serde_urlencoded v0.7.1 (registry `ustc`)
+  Downloaded shlex v2.0.1 (registry `ustc`)
+  Downloaded zerovec v0.11.9 (registry `ustc`)
+  Downloaded simd-adler32 v0.3.10 (registry `ustc`)
+  Downloaded slab v0.4.12 (registry `ustc`)
+  Downloaded smallvec v1.16.6 (registry `ustc`)
+  Downloaded socket2 v0.6.5 (registry `ustc`)
+  Downloaded stable_deref_trait v1.2.1 (registry `ustc`)
+  Downloaded subtle v2.6.1 (registry `ustc`)
+  Downloaded sync_wrapper v1.0.2 (registry `ustc`)
+  Downloaded synstructure v0.14.0 (registry `ustc`)
+  Downloaded thiserror v2.0.21 (registry `ustc`)
+  Downloaded zlib-rs v0.6.9 (registry `ustc`)
+  Downloaded thiserror-impl v2.0.21 (registry `ustc`)
+  Downloaded miniz_oxide v0.9.1 (registry `ustc`)
+  Downloaded mio v1.2.5 (registry `ustc`)
+  Downloaded quinn v0.11.12 (registry `ustc`)
+  Downloaded rand v0.10.4 (registry `ustc`)
+  Downloaded reqwest v0.12.28 (registry `ustc`)
+  Downloaded quinn-proto v0.11.19 (registry `ustc`)
+  Downloaded rustls v0.23.46 (registry `ustc`)
+  Downloaded rustls-webpki v0.103.17 (registry `ustc`)
+  Downloaded serde v1.0.229 (registry `ustc`)
+  Downloaded tinystr v0.8.5 (registry `ustc`)
+  Downloaded tinyvec v1.13.3 (registry `ustc`)
+  Downloaded tokio-rustls v0.26.6 (registry `ustc`)
+  Downloaded tower-service v0.3.3 (registry `ustc`)
+  Downloaded tower-layer v0.3.3 (registry `ustc`)
+  Downloaded try-lock v0.2.5 (registry `ustc`)
+  Downloaded tracing-core v0.1.36 (registry `ustc`)
+  Downloaded serde_json v1.0.154 (registry `ustc`)
+  Downloaded syn v3.0.10 (registry `ustc`)
+  Downloaded untrusted v0.9.0 (registry `ustc`)
+  Downloaded utf8_iter v1.1.0 (registry `ustc`)
+  Downloaded want v0.3.2 (registry `ustc`)
+  Downloaded utf_types v1.0.0 (registry `ustc`)
+  Downloaded writeable v0.6.4 (registry `ustc`)
+  Downloaded yoke v0.8.4 (registry `ustc`)
+  Downloaded zerofrom v0.1.8 (registry `ustc`)
+  Downloaded yoke-derive v0.8.4 (registry `ustc`)
+  Downloaded ring v0.17.14 (registry `ustc`)
+  Downloaded tower v0.5.3 (registry `ustc`)
+  Downloaded tower-http v0.6.11 (registry `ustc`)
+  Downloaded tracing v0.1.44 (registry `ustc`)
+  Downloaded url v2.5.9 (registry `ustc`)
+  Downloaded webpki-roots v1.0.12 (registry `ustc`)
+  Downloaded zerofrom-derive v0.1.8 (registry `ustc`)
+  Downloaded tokio v1.54.1 (registry `ustc`)
+   Compiling libc v0.2.191
+   Compiling stable_deref_trait v1.2.1
+   Compiling syn v3.0.10
+   Compiling pin-project-lite v0.2.18
+   Compiling itoa v1.0.19
+   Compiling find-msvc-tools v0.1.15
+   Compiling futures-core v0.3.34
+   Compiling shlex v2.0.1
+   Compiling cc v1.11.3
+   Compiling writeable v0.6.4
+   Compiling memchr v2.8.3
+   Compiling litemap v0.8.3
+   Compiling smallvec v1.16.6
+   Compiling utf_types v1.0.0
+   Compiling socket2 v0.6.5
+   Compiling utf8_iter v1.1.0
+   Compiling mio v1.2.5
+   Compiling ring v0.17.14
+   Compiling icu_normalizer_data v2.4.0
+   Compiling icu_properties_data v2.4.0
+   Compiling tokio v1.54.1
+   Compiling http v1.5.0
+   Compiling synstructure v0.14.0
+   Compiling zerofrom-derive v0.1.8
+   Compiling zerofrom v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling zerovec-derive v0.11.7
+   Compiling yoke v0.8.4
+   Compiling displaydoc v0.2.7
+   Compiling zerovec v0.11.9
+   Compiling zerotrie v0.2.5
+   Compiling once_cell v1.21.4
+   Compiling tinystr v0.8.5
+   Compiling potential_utf v0.1.6
+   Compiling icu_locale_core v2.4.0
+   Compiling icu_collections v2.4.0
+   Compiling futures-sink v0.3.34
+   Compiling percent-encoding v2.3.2
+   Compiling zeroize v1.9.2
+   Compiling rustls-pki-types v1.16.0
+   Compiling http-body v1.1.0
+   Compiling getrandom v0.2.17
+   Compiling icu_provider v2.4.0
+   Compiling futures-io v0.3.34
+   Compiling serde_core v1.0.229
+   Compiling futures-task v0.3.34
+   Compiling slab v0.4.12
+   Compiling httparse v1.10.1
+   Compiling untrusted v0.9.0
+   Compiling futures-util v0.3.34
+   Compiling icu_properties v2.4.0
+   Compiling icu_normalizer v2.4.0
+   Compiling try-lock v0.2.5
+   Compiling tower-service v0.3.3
+   Compiling rustls v0.23.46
+   Compiling want v0.3.2
+   Compiling idna_adapter v1.2.2
+   Compiling rustls-webpki v0.103.17
+   Compiling form_urlencoded v1.2.3
+   Compiling tracing-core v0.1.36
+   Compiling subtle v2.6.1
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling atomic-waker v1.1.2
+   Compiling hyper v1.13.0
+   Compiling tracing v0.1.44
+   Compiling idna v1.1.0
+   Compiling futures-channel v0.3.34
+   Compiling sync_wrapper v1.0.2
+   Compiling serde_json v1.0.154
+   Compiling base64 v0.23.1
+   Compiling ipnet v2.12.2
+   Compiling tower-layer v0.3.3
+   Compiling crc32fast v1.5.6
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling url v2.5.9
+   Compiling webpki-roots v1.0.12
+   Compiling tokio-rustls v0.26.6
+   Compiling ryu v1.0.23
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling bitflags v2.13.2
+   Compiling tower-http v0.6.11
+   Compiling miniz_oxide v0.9.1
+   Compiling hyper-rustls v0.27.10
+   Compiling serde_urlencoded v0.7.1
+   Compiling http-body-util v0.1.5
+   Compiling base64 v0.22.1
+   Compiling flate2 v1.1.11
+   Compiling reqwest v0.12.28
+   Compiling combine v4.6.9
+   Compiling mod-analyzer v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/mod-analyzer)
+   Compiling local-ai v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/local-ai)
+warning: missing documentation for an associated function
+   --> crates/local-ai/src/backend.rs:410:5
+    |
+410 |     pub fn new(config: EmbeddedServerConfig) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates/local-ai/src/lib.rs:17:9
+    |
+ 17 | #![warn(missing_docs)]
+    |         ^^^^^^^^^^^^
+
+warning: `local-ai` (lib) generated 1 warning
+   Compiling jni v0.21.1
+   Compiling mod-converter v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/mod-converter)
+    Finished `release` profile [optimized] target(s) in 35.82s
+     Copying libraries to /home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/starling/src/main/jniLibs
+
+> Task :starling:cargoNdkBuildRender
+    Building arm64-v8a (aarch64-linux-android)
+ Downloading crates ...
+  Downloaded allocator-api2 v0.2.22 (registry `ustc`)
+  Downloaded android_logger v0.14.1 (registry `ustc`)
+  Downloaded android_log-sys v0.3.2 (registry `ustc`)
+  Downloaded android_system_properties v0.1.6 (registry `ustc`)
+  Downloaded arrayvec v0.7.8 (registry `ustc`)
+  Downloaded aho-corasick v1.1.5 (registry `ustc`)
+  Downloaded autocfg v1.5.1 (registry `ustc`)
+  Downloaded bit-set v0.10.0 (registry `ustc`)
+  Downloaded bit-vec v0.9.1 (registry `ustc`)
+  Downloaded bytemuck v1.25.2 (registry `ustc`)
+  Downloaded bytemuck_derive v1.12.1 (registry `ustc`)
+  Downloaded codespan-reporting v0.13.1 (registry `ustc`)
+  Downloaded document-features v0.2.12 (registry `ustc`)
+  Downloaded equivalent v1.0.3 (registry `ustc`)
+  Downloaded env_filter v0.1.4 (registry `ustc`)
+  Downloaded foldhash v0.2.0 (registry `ustc`)
+  Downloaded gpu-allocator v0.28.0 (registry `ustc`)
+  Downloaded half v2.7.1 (registry `ustc`)
+  Downloaded libloading v0.8.9 (registry `ustc`)
+  Downloaded litrs v1.1.0 (registry `ustc`)
+  Downloaded lock_api v0.4.14 (registry `ustc`)
+  Downloaded naga-types v30.0.2 (registry `ustc`)
+  Downloaded num-traits v0.2.19 (registry `ustc`)
+  Downloaded ordered-float v5.5.1 (registry `ustc`)
+  Downloaded parking_lot v0.12.5 (registry `ustc`)
+  Downloaded parking_lot_core v0.9.12 (registry `ustc`)
+  Downloaded pollster v0.4.0 (registry `ustc`)
+  Downloaded presser v0.3.1 (registry `ustc`)
+  Downloaded profiling v1.0.18 (registry `ustc`)
+  Downloaded raw-window-handle v0.6.2 (registry `ustc`)
+  Downloaded renderdoc-sys v1.1.0 (registry `ustc`)
+  Downloaded scopeguard v1.2.0 (registry `ustc`)
+  Downloaded rustc-hash v1.1.0 (registry `ustc`)
+  Downloaded spirv v0.4.0+sdk-1.4.341.0 (registry `ustc`)
+  Downloaded ash v0.38.0+1.3.281 (registry `ustc`)
+  Downloaded indexmap v2.14.2 (registry `ustc`)
+  Downloaded hashbrown v0.16.1 (registry `ustc`)
+  Downloaded hashbrown v0.17.2 (registry `ustc`)
+  Downloaded libm v0.2.16 (registry `ustc`)
+  Downloaded static_assertions v1.1.0 (registry `ustc`)
+  Downloaded naga v30.0.1 (registry `ustc`)
+  Downloaded regex v1.13.2 (registry `ustc`)
+  Downloaded regex-automata v0.4.19 (registry `ustc`)
+  Downloaded regex-syntax v0.8.12 (registry `ustc`)
+  Downloaded wgpu-core-deps-windows-linux-android v30.0.2 (registry `ustc`)
+  Downloaded wgpu-naga-bridge v30.0.2 (registry `ustc`)
+  Downloaded wgpu v30.0.1 (registry `ustc`)
+  Downloaded unicode-width v0.2.3 (registry `ustc`)
+  Downloaded wgpu-core v30.0.1 (registry `ustc`)
+  Downloaded wgpu-types v30.0.1 (registry `ustc`)
+  Downloaded zerocopy-derive v0.8.65 (registry `ustc`)
+  Downloaded zerocopy v0.8.65 (registry `ustc`)
+  Downloaded wgpu-hal v30.0.1 (registry `ustc`)
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling log v0.4.35
+   Compiling syn v3.0.10
+   Compiling libm v0.2.16
+   Compiling equivalent v1.0.3
+   Compiling thiserror v2.0.21
+   Compiling autocfg v1.5.1
+   Compiling hashbrown v0.17.2
+   Compiling num-traits v0.2.19
+   Compiling zerocopy v0.8.65
+   Compiling zerocopy-derive v0.8.65
+   Compiling indexmap v2.14.2
+   Compiling rustc-hash v1.1.0
+   Compiling naga v30.0.1
+   Compiling unicode-width v0.2.3
+   Compiling bit-vec v0.9.1
+   Compiling thiserror-impl v2.0.21
+   Compiling bytemuck_derive v1.12.1
+   Compiling parking_lot_core v0.9.12
+   Compiling ash v0.38.0+1.3.281
+   Compiling bit-set v0.10.0
+   Compiling codespan-reporting v0.13.1
+   Compiling bytemuck v1.25.2
+   Compiling naga-types v30.0.2
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling libloading v0.8.9
+   Compiling raw-window-handle v0.6.2
+   Compiling once_cell v1.21.4
+   Compiling scopeguard v1.2.0
+   Compiling unicode-ident v1.0.27
+   Compiling static_assertions v1.1.0
+   Compiling allocator-api2 v0.2.22
+   Compiling arrayvec v0.7.8
+   Compiling smallvec v1.16.6
+   Compiling hashbrown v0.16.1
+   Compiling wgpu-types v30.0.1
+   Compiling lock_api v0.4.14
+   Compiling wgpu-hal v30.0.1
+   Compiling presser v0.3.1
+   Compiling parking_lot v0.12.5
+   Compiling aho-corasick v1.1.5
+   Compiling half v2.7.1
+   Compiling android_system_properties v0.1.6
+   Compiling ordered-float v5.5.1
+   Compiling renderdoc-sys v1.1.0
+   Compiling regex-syntax v0.8.12
+   Compiling profiling v1.0.18
+   Compiling regex-automata v0.4.19
+   Compiling wgpu-core v30.0.1
+   Compiling litrs v1.1.0
+   Compiling document-features v0.2.12
+   Compiling regex v1.13.2
+   Compiling wgpu v30.0.1
+   Compiling wgpu-naga-bridge v30.0.2
+   Compiling env_filter v0.1.4
+   Compiling android_log-sys v0.3.2
+   Compiling android_logger v0.14.1
+   Compiling jni v0.21.1
+   Compiling gpu-allocator v0.28.0
+   Compiling pollster v0.4.0
+   Compiling starling-features v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/starling-features)
+   Compiling wgpu-core-deps-windows-linux-android v30.0.2
+   Compiling starling-render v0.1.0 (/home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/crates/starling-render)
+    Finished `release` profile [optimized] target(s) in 51.14s
+     Copying libraries to /home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/starling/src/main/jniLibs
+
+> Task :starling:preBuild
+> Task :starling:preDebugBuild
+> Task :starling:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :starling:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :starling:generateDebugResValues FROM-CACHE
+> Task :starling:checkDebugAarMetadata
+> Task :starling:mapDebugSourceSetPaths
+> Task :starling:generateDebugResources
+> Task :starling:packageDebugResources
+> Task :starling:mergeDebugResources
+> Task :starling:createDebugCompatibleScreenManifests
+> Task :starling:extractDeepLinksDebug FROM-CACHE
+> Task :starling:parseDebugLocalResources
+> Task :starling:processDebugMainManifest
+> Task :starling:processDebugManifest
+> Task :starling:javaPreCompileDebug FROM-CACHE
+> Task :starling:mergeDebugShaders
+> Task :starling:compileDebugShaders NO-SOURCE
+> Task :starling:generateDebugAssets UP-TO-DATE
+> Task :starling:mergeDebugAssets
+> Task :starling:compressDebugAssets FROM-CACHE
+> Task :starling:desugarDebugFileDependencies FROM-CACHE
+> Task :starling:checkDebugDuplicateClasses
+
+> Task :starling:configureCMakeDebug[arm64-v8a]
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+
+> Task :starling:mergeExtDexDebug FROM-CACHE
+> Task :starling:mergeLibDexDebug FROM-CACHE
+> Task :starling:buildCMakeDebug[arm64-v8a]
+> Task :starling:mergeDebugJniLibFolders
+> Task :starling:mergeDebugNativeLibs
+> Task :starling:validateSigningDebug
+> Task :starling:writeDebugAppMetadata
+> Task :starling:processDebugManifestForPackage
+> Task :starling:stripDebugDebugSymbols
+> Task :starling:writeDebugSigningConfigVersions
+> Task :starling:processDebugResources
+
+> Task :starling:compileDebugKotlin
+w: file:///home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/starling/src/main/kotlin/dev/starling/app/AccountScreen.kt:129:38 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+w: file:///home/runner/work/Dual-motor-Minecraft-/Dual-motor-Minecraft-/starling/src/main/kotlin/dev/starling/app/GameActivity.kt:92:16 'fun setDecorFitsSystemWindows(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+
+> Task :starling:compileDebugJavaWithJavac
+> Task :starling:dexBuilderDebug
+> Task :starling:mergeDebugGlobalSynthetics FROM-CACHE
+> Task :starling:processDebugJavaRes
+> Task :starling:mergeProjectDexDebug
+> Task :starling:mergeDebugJavaResource
+> Task :starling:packageDebug
+> Task :starling:createDebugApkListingFileRedirect
+> Task :starling:assembleDebug
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/buildapk-1795856209206.json
+
+BUILD SUCCESSFUL in 2m 36s
+41 actionable tasks: 33 executed, 8 from cache
+
+===== DIAGNOSTICA LIBRERIE NATIVE =====
+--- jniLibs (cargo-ndk) ---
+total 9024
+drwxr-xr-x 2 runner runner    4096 Nov 28 08:58 .
+drwxr-xr-x 3 runner runner    4096 Nov 28 08:57 ..
+-rwxr-xr-x 1 runner runner  603216 Nov 28 08:57 libbridge_jni.so
+-rwxr-xr-x 1 runner runner 3469888 Nov 28 08:58 libmod_converter.so
+-rwxr-xr-x 1 runner runner 5151000 Nov 28 08:58 libstarling_render.so
+--- .so da CMake ---
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libandroidx.graphics.path.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libstarling_render.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libmod_converter.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libstarling_jvm_host.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libbridge_jni.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libandroidx.graphics.path.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libandroidx.graphics.path.so
+starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libandroidx.graphics.path.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libandroidx.graphics.path.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libstarling_render.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libmod_converter.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libstarling_jvm_host.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libbridge_jni.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libandroidx.graphics.path.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libandroidx.graphics.path.so
+starling/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libandroidx.graphics.path.so
+starling/build/intermediates/cxx/Debug/286z4110/obj/arm64-v8a/libstarling_jvm_host.so
+starling/build/intermediates/merged_jni_libs/debug/mergeDebugJniLibFolders/out/arm64-v8a/libstarling_render.so
+starling/build/intermediates/merged_jni_libs/debug/mergeDebugJniLibFolders/out/arm64-v8a/libmod_converter.so
+starling/build/intermediates/merged_jni_libs/debug/mergeDebugJniLibFolders/out/arm64-v8a/libbridge_jni.so
+--- APK: starling/build/outputs/apk/debug/starling-debug.apk ---
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+   431216  1981-01-01 01:01   lib/arm64-v8a/libbridge_jni.so
+  2644640  1981-01-01 01:01   lib/arm64-v8a/libmod_converter.so
+   430440  1981-01-01 01:01   lib/arm64-v8a/libstarling_jvm_host.so
+  3902616  1981-01-01 01:01   lib/arm64-v8a/libstarling_render.so
+--- dipendenze ELF (DT_NEEDED / SONAME) ---
+## starling/src/main/jniLibs/arm64-v8a/libbridge_jni.so
+  0x0000000000000001 (NEEDED)       Shared library: [libdl.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libc.so]
+## starling/src/main/jniLibs/arm64-v8a/libmod_converter.so
+  0x0000000000000001 (NEEDED)       Shared library: [libdl.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libc.so]
+## starling/src/main/jniLibs/arm64-v8a/libstarling_render.so
+  0x0000000000000001 (NEEDED)       Shared library: [libandroid.so]
+  0x0000000000000001 (NEEDED)       Shared library: [liblog.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libdl.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libm.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libc.so]
+## starling/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libstarling_jvm_host.so
+  0x0000000000000001 (NEEDED)       Shared library: [liblog.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libdl.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libm.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libc.so]
+  0x000000000000000e (SONAME)       Library soname: [libstarling_jvm_host.so]
+===== FINE DIAGNOSTICA =====
