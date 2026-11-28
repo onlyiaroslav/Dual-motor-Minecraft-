@@ -44,9 +44,12 @@ REQUIRED_IMPORTS = {
     "dp": "androidx.compose.ui.unit.dp",
     "sp": "androidx.compose.ui.unit.sp",
     "Dp": "androidx.compose.ui.unit.Dp",
+    "FontFamily": "androidx.compose.ui.text.font.FontFamily",
     "FontWeight": "androidx.compose.ui.text.font.FontWeight",
     "TextOverflow": "androidx.compose.ui.text.style.TextOverflow",
     "TextAlign": "androidx.compose.ui.text.style.TextAlign",
+    "stringResource": "androidx.compose.ui.res.stringResource",
+    "painterResource": "androidx.compose.ui.res.painterResource",
     "KeyboardType": "androidx.compose.ui.text.input.KeyboardType",
     "KeyboardOptions": "androidx.compose.foundation.text.KeyboardOptions",
     "Dialog": "androidx.compose.ui.window.Dialog",
@@ -138,6 +141,10 @@ FORBIDDEN_CALLS = [
 DELEGATE_RE = re.compile(r"\bby\s+(\w+)")
 # Delegate che NON richiedono androidx.compose.runtime.getValue
 STDLIB_DELEGATES = {"lazy", "observable", "vetoable", "map", "this"}
+
+# Funzioni top-level: si chiamano senza receiver (`stringResource(R.string.x)`),
+# quindi il pattern "dopo un punto" usato per le estensioni non le intercetta.
+TOP_LEVEL_SYMBOLS = {"stringResource", "painterResource", "rememberSaveable"}
 
 
 def strip_code(text):
@@ -350,6 +357,8 @@ def check_file(path):
             ]
         elif symbol in ("dp", "sp"):
             patterns = [r"\.\s*" + esc + r"\b"]
+        elif symbol in TOP_LEVEL_SYMBOLS:
+            patterns = [r"(?<![\w.])" + esc + r"\s*[({]"]
         elif symbol == "launch":
             # scope.launch { ... } = coroutine; picker.launch(...) = ActivityResultLauncher
             patterns = [r"\.\s*" + esc + r"\s*\{"]
