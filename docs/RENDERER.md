@@ -66,8 +66,8 @@ già caricata nello stesso namespace: nessun link formale in CMake.
 
 ```bash
 # come gli altri crate (task Gradle cargoNdkBuildRender, agganciato a preBuild)
-cargo ndk -t arm64-v8a -p 33 -o starling/src/main/jniLibs \
-    build --release -p starling-render
+cargo ndk -t arm64-v8a --platform 33 -o starling/src/main/jniLibs \
+    build --release --package starling-render
 ```
 
 wgpu è pinnato a `=30.0.1` (la versione di Starling upstream; la 30.0.2 ha

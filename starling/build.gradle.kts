@@ -76,9 +76,9 @@ val cargoNdkBuildBridge by tasks.registering(Exec::class) {
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
-        "-p", "33",
+        "--platform", "33",
         "-o", "starling/src/main/jniLibs",
-        "build", "--release", "-p", "bridge-jni"
+        "build", "--release", "--package", "bridge-jni"
     )
 }
 
@@ -89,9 +89,9 @@ val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
-        "-p", "33",
+        "--platform", "33",
         "-o", "starling/src/main/jniLibs",
-        "build", "--release", "-p", "mod-converter", "--features", "jni"
+        "build", "--release", "--package", "mod-converter", "--features", "jni"
     )
 }
 
@@ -104,9 +104,9 @@ val cargoNdkBuildRender by tasks.registering(Exec::class) {
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
-        "-p", "33",
+        "--platform", "33",
         "-o", "starling/src/main/jniLibs",
-        "build", "--release", "-p", "starling-render"
+        "build", "--release", "--package", "starling-render"
     )
 }
 

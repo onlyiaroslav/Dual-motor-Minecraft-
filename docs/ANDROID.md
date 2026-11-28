@@ -33,7 +33,7 @@ rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]  # pagine 16 KB, Andro
 ```
 
 In alternativa: `cargo install cargo-ndk` e
-`cargo ndk -t arm64-v8a -o app/src/main/jniLibs build --release -p bridge-jni`.
+`cargo ndk -t arm64-v8a --platform 33 -o app/src/main/jniLibs build --release --package bridge-jni`.
 
 **Copia la `.so` in `app/src/main/jniLibs/arm64-v8a/libbridge_jni.so`.**
 Su Android 15 le librerie native devono stare in `jniLibs`/`nativeLibraryDir`:
@@ -253,8 +253,8 @@ export ANDROID_NDK_HOME="$HOME/Android/Sdk/ndk/27.2.12479018"
 rustup target add aarch64-linux-android
 cargo install cargo-ndk
 
-cargo ndk -t arm64-v8a -o app/src/main/jniLibs build --release \
-  -p mod-converter --features jni
+cargo ndk -t arm64-v8a --platform 33 -o app/src/main/jniLibs build --release \
+  --package mod-converter --features jni
 # → app/src/main/jniLibs/arm64-v8a/libmod_converter.so
 ```
 

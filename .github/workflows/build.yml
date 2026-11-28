@@ -104,7 +104,9 @@ jobs:
 
       - name: Install cargo-ndk
         run: |
-          cargo install cargo-ndk
+          # Pin 4.x: in 4.x "-p" non è più il platform level (collisione con
+          # --package di Cargo). Le invocazioni usano --platform/--package.
+          cargo install cargo-ndk --version 4.1.2 --locked
           cargo ndk --version
 
       - name: Set up Gradle

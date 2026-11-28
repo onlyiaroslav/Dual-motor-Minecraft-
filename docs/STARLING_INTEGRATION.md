@@ -18,9 +18,9 @@ rustup target add aarch64-linux-android
 cargo install cargo-ndk --locked
 
 # Build: bridge-jni produce libbridge_jni.so direttamente in jniLibs
-cargo ndk -t arm64-v8a -p 33 \
+cargo ndk -t arm64-v8a --platform 33 \
     -o starling/app/src/main/jniLibs \
-    build --release -p bridge-jni
+    build --release --package bridge-jni
 # → starling/app/src/main/jniLibs/arm64-v8a/libbridge_jni.so
 ```
 

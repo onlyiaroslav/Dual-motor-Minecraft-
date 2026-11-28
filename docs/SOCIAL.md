@@ -114,9 +114,9 @@ rimuoverlo.
 ### Packaging APK
 
 ```bash
-cargo ndk -t arm64-v8a -p 33 \
+cargo ndk -t arm64-v8a --platform 33 \
   -o starling/app/src/main/jniLibs \
-  build --release -p starling-social --features jni
+  build --release --package starling-social --features jni
 ```
 
 La `.so` risultante è `libstarling_social.so` e va inclusa in
