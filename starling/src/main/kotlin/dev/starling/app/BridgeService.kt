@@ -24,12 +24,23 @@ import java.io.File
 class BridgeService : Service() {
 
     companion object {
+        /** True se le librerie native sono state caricate senza errori. */
+        var nativeLibsLoaded: Boolean = false
+            private set
+
         init {
             // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
-            System.loadLibrary("bridge_jni")
-            System.loadLibrary("starling_jvm_host")
+            // Se una libreria manca o fallisce, NON facciamo crashare il
+            // servizio: onStartCommand si limita a fermarsi.
             // libjvm.so della JRE Android viene caricata con dlopen dall'host:
             // deve stare in nativeLibraryDir (jniLibs/arm64-v8a).
+            nativeLibsLoaded = try {
+                System.loadLibrary("bridge_jni")
+                System.loadLibrary("starling_jvm_host")
+                true
+            } catch (t: Throwable) {
+                false
+            }
         }
 
         @JvmStatic
@@ -43,39 +54,51 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, buildNotification())
-
-        val base = getExternalFilesDir(null)!!
-        val mods = File(base, "mods").apply { mkdirs() }
-        val lut = File(base, "lut").apply { mkdirs() }
-        val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
-
-        // Classi del bridge per la JVM embedded (jar, NON dex).
-        val bridgeJar = File(bridgeDir, "bridge-u8.jar")
-        assets.open("bridge-u8.jar").use { input ->
-            bridgeJar.outputStream().use { input.copyTo(it) }
+        if (!nativeLibsLoaded) {
+            stopSelf()
+            return START_NOT_STICKY
         }
 
-        // mapping.bin: generato OFFLINE (tool di analisi). Se assente, si usa
-        // il default impacchettato negli asset; le mod senza mapping restano
-        // in coda di analisi offline (ModRegistry.scan), mai analizzate qui.
-        val mapping = File(lut, "mapping.bin")
-        if (!mapping.exists()) {
-            assets.open("mapping.bin").use { input ->
-                mapping.outputStream().use { input.copyTo(it) }
+        // Qualsiasi fallimento (asset mancante, runtime assente, JNI che lancia)
+        // deve fermare il servizio, non crashare l'app.
+        val started = runCatching {
+            startForeground(1, buildNotification())
+
+            val base = getExternalFilesDir(null) ?: filesDir
+            val mods = File(base, "mods").apply { mkdirs() }
+            val lut = File(base, "lut").apply { mkdirs() }
+            val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
+
+            // Classi del bridge per la JVM embedded (jar, NON dex).
+            val bridgeJar = File(bridgeDir, "bridge-u8.jar")
+            if (!bridgeJar.exists()) {
+                assets.open("bridge-u8.jar").use { input ->
+                    bridgeJar.outputStream().use { input.copyTo(it) }
+                }
             }
-        }
 
-        val jreLib = File(applicationInfo.nativeLibraryDir, "libjvm.so")
-        val ok = nativeStart(
-            jreLib.absolutePath,
-            bridgeJar.absolutePath,
-            mods.absolutePath,
-            lut.absolutePath,
-            mapping.absolutePath,
-            cacheDir.absolutePath
-        )
-        if (!ok) {
+            // mapping.bin: generato OFFLINE (tool di analisi). Se assente, si usa
+            // il default impacchettato negli asset; le mod senza mapping restano
+            // in coda di analisi offline (ModRegistry.scan), mai analizzate qui.
+            val mapping = File(lut, "mapping.bin")
+            if (!mapping.exists()) {
+                assets.open("mapping.bin").use { input ->
+                    mapping.outputStream().use { input.copyTo(it) }
+                }
+            }
+
+            val jvmPath = JreInstaller.prepareEnv(this).getOrThrow()
+            nativeStart(
+                jvmPath,
+                bridgeJar.absolutePath,
+                mods.absolutePath,
+                lut.absolutePath,
+                mapping.absolutePath,
+                cacheDir.absolutePath
+            )
+        }.getOrDefault(false)
+
+        if (!started) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -85,7 +108,9 @@ class BridgeService : Service() {
     }
 
     override fun onDestroy() {
-        nativeStop()
+        if (nativeLibsLoaded) {
+            runCatching { nativeStop() }
+        }
         super.onDestroy()
     }
 
@@ -97,7 +122,7 @@ class BridgeService : Service() {
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         return Notification.Builder(this, "bridge")
-            .setContentTitle("Starling — JVM headless attiva")
+            .setContentTitle("Doge Client — JVM headless attiva")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .build()
     }

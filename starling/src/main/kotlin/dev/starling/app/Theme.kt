@@ -1,7 +1,10 @@
 package dev.starling.app
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -9,74 +12,122 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
-// Palette colori Doge Client
+// Palette ufficiale Doge Client
+//   Oro Dogecoin #C2A633 / accento #E1B303
+//   Antracite profondo #121214 (background) / #1C1C20 (surface)
+//   Testo ad alto contrasto #F5F5F5
 // ---------------------------------------------------------------------------
-val DogePrimary = Color(0xFFF4A460)   // Oro / Giallo
-val DogeSecondary = Color(0xFF8B4513) // Marrone scuro
-val DogeTertiary = Color(0xFFE8E0D0) // Bianco sporco (testi)
-val DogeBackground = Color(0xFF121212) // Dark mode di default
-val DogeSurface = Color(0xFF1E1E1E)
+val DogePrimary = Color(0xFFC2A633)        // oro Dogecoin
+val DogeAccent = Color(0xFFE1B303)         // accento acceso
+val DogePrimaryDeep = Color(0xFF8F7A22)    // oro scuro (gradienti/bordi)
+val DogeSecondary = Color(0xFF8B6F1F)      // ambra secondaria
+val DogeTertiary = Color(0xFFF5F5F5)       // testo chiaro (compat)
+val DogeBackground = Color(0xFF121214)     // antracite profondo
+val DogeBackgroundAlt = Color(0xFF17171A)
+val DogeSurface = Color(0xFF1C1C20)        // card
+val DogeSurfaceHigh = Color(0xFF26262C)    // card elevata / dialoghi
+val DogeOutline = Color(0x1FFFFFFF)        // bordo sottile
+val DogeTextPrimary = Color(0xFFF5F5F5)
+val DogeTextSecondary = Color(0xFFA8A8B3)
+val DogeSuccess = Color(0xFF4ADE80)
+val DogeDanger = Color(0xFFFF5C5C)
 
 // ---------------------------------------------------------------------------
-// ColorScheme Material 3 (Dark)
+// ColorScheme Material 3 — sempre dark: il brand non ha variante chiara.
 // ---------------------------------------------------------------------------
 private val DogeDarkColorScheme = darkColorScheme(
     primary = DogePrimary,
+    onPrimary = Color(0xFF1A1608),
+    primaryContainer = Color(0xFF3A3113),
+    onPrimaryContainer = DogeAccent,
     secondary = DogeSecondary,
-    tertiary = DogeTertiary,
+    onSecondary = Color(0xFFF5F5F5),
+    secondaryContainer = Color(0xFF2E2A18),
+    onSecondaryContainer = DogeAccent,
+    tertiary = DogeAccent,
+    onTertiary = Color(0xFF1A1608),
     background = DogeBackground,
+    onBackground = DogeTextPrimary,
     surface = DogeSurface,
-    onPrimary = Color.BLACK,
-    onSecondary = Color.WHITE,
-    onBackground = DogeTertiary,
-    onSurface = DogeTertiary,
+    onSurface = DogeTextPrimary,
+    surfaceVariant = DogeSurfaceHigh,
+    onSurfaceVariant = DogeTextSecondary,
+    outline = DogeOutline,
+    outlineVariant = Color(0x14FFFFFF),
+    error = DogeDanger,
+    onError = Color(0xFF2A0808),
+    scrim = Color(0xCC000000),
 )
 
 // ---------------------------------------------------------------------------
-// Tipografia moderna e arrotondata
+// Tipografia Material 3
 // ---------------------------------------------------------------------------
 private val DogeTypography = Typography(
     displayLarge = TextStyle(
-        fontSize = 34.sp,
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 30.sp,
         fontWeight = FontWeight.ExtraBold,
-        letterSpacing = 0.8.sp
+        letterSpacing = (-0.4).sp,
     ),
     headlineLarge = TextStyle(
-        fontSize = 28.sp,
-        fontWeight = FontWeight.Bold
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.2).sp,
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
     ),
     titleLarge = TextStyle(
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Medium
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.SemiBold,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
     ),
     bodyLarge = TextStyle(
-        fontSize = 16.sp
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 15.sp,
+        lineHeight = 21.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
     ),
     labelLarge = TextStyle(
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.6.sp,
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 1.2.sp,
     ),
 )
 
-// ---------------------------------------------------------------------------
-// Tema Compose Doge Client
-// ---------------------------------------------------------------------------
+private val DogeShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(26.dp),
+)
+
 @Composable
 fun DogeTheme(content: @Composable () -> Unit) {
-    val colorScheme = if (isSystemInDarkTheme()) {
-        DogeDarkColorScheme
-    } else {
-        DogeDarkColorScheme.copy(
-            background = Color.White,
-            surface = Color(0xFFF5F5F5),
-            onBackground = Color(0xFF121212),
-            onSurface = Color(0xFF121212),
-        )
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = DogeDarkColorScheme,
         typography = DogeTypography,
-        content = content
+        shapes = DogeShapes,
+        content = content,
     )
 }

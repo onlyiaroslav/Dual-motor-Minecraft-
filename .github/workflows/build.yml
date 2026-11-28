@@ -1,4 +1,7 @@
-name: Build Debug APK
+name: Build Doge Client APK
+
+permissions:
+  contents: write
 
 on:
   push:
@@ -57,8 +60,57 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.0.12077973
 
       - name: Upload APK artifact
+        if: steps.buildapk.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: doge-client-debug-apk
           path: starling/build/outputs/apk/debug/*.apk
           retention-days: 30
+
+      # Gli artifact di Actions sono SEMPRE zip che contiene l'APK. Qui l'APK
+      # viene pubblicato anche come asset di Release: si scarica il file .apk
+      # diretto, senza zip da estrarre.
+      - name: APK diretto (Release, senza zip)
+        if: steps.buildapk.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          APK=$(ls starling/build/outputs/apk/debug/*.apk | head -1)
+          TAG="latest-debug"
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          AUTH="Authorization: Bearer $GH_TOKEN"
+
+          REL_ID=$(curl -sS -H "$AUTH" "$API/releases/tags/$TAG" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('id') or '')")
+
+          if [ -z "$REL_ID" ]; then
+            REL_ID=$(curl -sS -X POST -H "$AUTH" -H "Content-Type: application/json" \
+              "$API/releases" \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"Doge Client — APK debug\",\"prerelease\":true,\"body\":\"APK debug scaricabile direttamente (nessuno zip).\"}" \
+              | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          fi
+
+          # Rimuove l'asset precedente con lo stesso nome (evita 422).
+          curl -sS -H "$AUTH" "$API/releases/$REL_ID/assets" \
+            | python3 -c "
+          import json,sys
+          for a in json.load(sys.stdin):
+              if a['name'] == 'doge-client-debug.apk':
+                  print(a['id'])
+          " | while read -r AID; do
+            [ -n "$AID" ] && curl -sS -X DELETE -H "$AUTH" "$API/releases/assets/$AID" || true
+          done
+
+          URL=$(curl -sS -X POST -H "$AUTH" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @"$APK" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$REL_ID/assets?name=doge-client-debug.apk" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('browser_download_url',''))")
+
+          echo "APK diretto: $URL"
+          {
+            echo "### APK scaricabile direttamente"
+            echo ""
+            echo "[$URL]($URL)"
+          } >> "$GITHUB_STEP_SUMMARY"

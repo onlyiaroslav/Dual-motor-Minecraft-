@@ -32,20 +32,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
-// Schermate di navigazione
+// Sezioni: quelle originali di Starling + Mod & Upgrade di Doge Client.
 // ---------------------------------------------------------------------------
-enum class Screen(val id: Int) {
-    Home(0),
-    Mods(1),
-    Friends(2),
-    Settings(3)
+enum class Screen(val label: String, val emoji: String) {
+    Home("Home", "🏠"),
+    Mods("Mod", "🧩"),
+    Friends("Amici", "🐕"),
+    Settings("Impostazioni", "⚙️"),
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +59,7 @@ enum class Screen(val id: Int) {
 @Composable
 private fun DogeBottomNavigation(
     selectedScreen: Screen,
-    onItemClick: (Screen) -> Unit
+    onItemClick: (Screen) -> Unit,
 ) {
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = DogePrimary,

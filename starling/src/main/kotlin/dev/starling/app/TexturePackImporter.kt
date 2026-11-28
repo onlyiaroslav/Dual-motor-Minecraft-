@@ -5,6 +5,7 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import dev.starling.packs.BaseAction
 import dev.starling.packs.PackGate
 import dev.starling.packs.PackImporter
 import dev.starling.packs.Result as PackImportResult
@@ -36,16 +37,20 @@ class TexturePackImporter(private val activity: ComponentActivity) {
     private val core = PackImporter()
     private val gate = PackGate()
     private val packsDir =
-        File(activity.getExternalFilesDir(null), "resourcepacks").apply { mkdirs() }
+        File(activity.getExternalFilesDir(null) ?: activity.filesDir, "resourcepacks")
+            .apply { mkdirs() }
 
     private val picker =
         activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
                 val result = import(uri)
                 if (result.ok) {
-                    toast("Pack importato: ${result.packDir.fileName}")
-                    // Notifica il launcher/resource manager per il reload immediato.
-                    onPackImported(result.packDir.toFile())
+                    val dir = result.packDir
+                    if (dir != null) {
+                        toast("Pack importato: ${dir.fileName}")
+                        // Notifica il launcher/resource manager per il reload immediato.
+                        onPackImported(dir.toFile())
+                    }
                 } else {
                     // Pack scartato: messaggio d'errore, NESSUN restart dei download.
                     toast("Pack scartato: ${result.error}")
@@ -71,7 +76,7 @@ class TexturePackImporter(private val activity: ComponentActivity) {
         if (result.ok) {
             gate.onExternalPackValid()
         } else {
-            gate.onExternalPackInvalid(result.error) // → BaseAction.NONE, mai download
+            gate.onExternalPackInvalid(result.error ?: "errore sconosciuto") // → BaseAction.NONE, mai download
         }
         return result
     }
@@ -80,7 +85,7 @@ class TexturePackImporter(private val activity: ComponentActivity) {
      * Chiamata dal launcher all'avvio: scarica i file base SOLO se mancano
      * davvero. Il fallimento di pack esterni non entra in questa decisione.
      */
-    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): PackGate.BaseAction =
+    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): BaseAction =
         gate.checkBaseFiles(baseFilesMissing)
 
     /** Hook per il resource manager di Starling (reload immediato del pack). */

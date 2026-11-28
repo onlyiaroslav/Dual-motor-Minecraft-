@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layer monocromatico (icone a tema, Android 13+): solo la "Ð". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M44,36 H57 C68,36 75,43.5 75,54 C75,64.5 68,72 57,72 H44 Z
+            M51,43 H56.5 C63,43 68,47.5 68,54 C68,60.5 63,65 56.5,65 H51 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,50.5 H60 V57.5 H36 Z" />
+</vector>
