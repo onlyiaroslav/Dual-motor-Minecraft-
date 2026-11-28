@@ -1,8 +1,9 @@
 // Starling — modulo Android del launcher Doge Client.
 //
 // Pipeline APK:
-//   1. cargoNdkBuildBridge / cargoNdkBuildModConverter / cargoNdkBuildRender
-//      (Exec): compilano le librerie Rust in starling/src/main/jniLibs/arm64-v8a/
+//   1. cargoNdkBuildBridge / cargoNdkBuildModConverter / cargoNdkBuildRender /
+//      cargoNdkBuildSocial (Exec): compilano le librerie Rust in
+//      starling/src/main/jniLibs/arm64-v8a/
 //   2. externalNativeBuild (CMake): compila starling_jvm_host.cpp
 //   3. packaging: tutte le .so finiscono nell'APK, non compresse
 //      (useLegacyPackaging=false, pagine 16 KB)
@@ -110,8 +111,26 @@ val cargoNdkBuildRender by tasks.registering(Exec::class) {
     )
 }
 
+// Task 4: libstarling_social.so (lista amici + mini-server auth offline).
+// Senza questa libreria la tab "Amici" non può aprire SocialBridge.
+val cargoNdkBuildSocial by tasks.registering(Exec::class) {
+    workingDir = rootProject.projectDir
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "--platform", "33",
+        "-o", "starling/src/main/jniLibs",
+        "build", "--release", "--package", "starling-social", "--features", "jni"
+    )
+}
+
 tasks.named("preBuild") {
-    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter, cargoNdkBuildRender)
+    dependsOn(
+        cargoNdkBuildBridge,
+        cargoNdkBuildModConverter,
+        cargoNdkBuildRender,
+        cargoNdkBuildSocial,
+    )
 }
 
 // --- Dipendenze Jetpack Compose (UI Doge Client) ---------------------------
@@ -122,11 +141,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.activity:activity-compose:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    // Decompressione XZ per gli archivi JRE .tar.xz (puro Java, nessuna deps).
-    implementation("org.tukaani:xz:1.9")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
 }

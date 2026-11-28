@@ -1,33 +1,23 @@
-// Starling — host JVM headless in-process (VERSIONE DI PRODUZIONE per Android).
+// Starling — headless JVM host in-process (PRODUCTION VERSION for Android).
 //
-// Sostituisce docs/starling_jvm_host.cpp (che era uno snippet illustrativo).
-// Differenze chiave Linux → Android (vedi docs/STARLING_INTEGRATION.md):
-//   1. libjvm.so NON si linka alla build (l'NDK non ce l'ha): si carica con
-//      dlopen a runtime dal percorso della JRE Android (PojavLauncher-style).
-//   2. AttachCurrentThread ha firma diversa su Android (JNIEnv**) vs JNI
+// Replaces docs/starling_jvm_host.cpp (which was an illustrative snippet).
+// Key differences Linux → Android (see docs/STARLING_INTEGRATION.md):
+//   1. libjvm.so is NOT linked into the build (the NDK has none): it is loaded with
+//      dlopen at runtime from the Android JRE path (PojavLauncher-style).
+//   2. AttachCurrentThread has a different signature on Android (JNIEnv**) vs JNI
 //      standard (void**): guard __ANDROID__.
-//   3. Export JNI per BridgeService (ART) e per EngineSink (JVM embedded):
-//      due runtime distinti, gli oggetti non attraversano il confine.
-//   4. Callback C (starling_jvm_set_action_callback) per il motore Rust:
-//      è l'unico ponte verso il layer nativo del motore.
+//   3. JNI export for BridgeService (ART) and for EngineSink (embedded JVM):
+//      two distinct runtimes, the objects do not cross the boundary.
+//   4. C callback (starling_jvm_set_action_callback) for the Rust engine:
+//      it is the only bridge to the engine's native layer.
 //
 // Build: starling/CMakeLists.txt (NDK, arm64-v8a).
 
 #include <jni.h>
 #include <dlfcn.h>
 
-// L'jni.h dell'NDK Android non definisce JNI_VERSION_1_8 (presente solo nel
-// JNI desktop). Lo definiamo qui se manca, per evitare "undeclared identifier".
-#ifndef JNI_VERSION_1_8
-#define JNI_VERSION_1_8 0x00010008
-#endif
-
 #include <cstdint>
-#include <cstdlib>
 #include <string>
-#include <vector>
-#include <algorithm>
-#include <dirent.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -49,141 +39,61 @@ jmethodID g_poll = nullptr;
 jclass g_bootstrap = nullptr;      // global ref
 jmethodID g_stop = nullptr;
 jlong g_handle = 0;
-// Ultimo errore di avvio, esposto alla UI per non fallire in silenzio.
-std::string g_last_error;
 
-// Callback registrata dal motore Rust: riceve gli ID azione risolti dalla LUT.
+// Callback registered by the Rust engine: receives the action IDs resolved from the LUT.
 using ActionCb = void (*)(const int32_t* ids, size_t count);
 ActionCb g_action_cb = nullptr;
 
-// Precarica le librerie sorelle del JRE (libjli, libjava, libnet, libnio, ...)
-// con percorso ASSOLUTO. Necessario: LD_LIBRARY_PATH viene letta dal linker
-// solo all'avvio del processo, quindi impostarla dopo non basta. Caricandole
-// prima con RTLD_GLOBAL, i DT_NEEDED di libjvm.so sono già soddisfatti.
-void preloadJreLibs(const std::string& jvmPath) {
-    // .../lib/server/libjvm.so -> libDir = .../lib, home = .../
-    const size_t slash = jvmPath.find_last_of('/');
-    if (slash == std::string::npos) return;
-    const std::string serverDir = jvmPath.substr(0, slash);
-    const size_t slash2 = serverDir.find_last_of('/');
-    const std::string libDir =
-        (slash2 == std::string::npos) ? serverDir : serverDir.substr(0, slash2);
-    const size_t slash3 = libDir.find_last_of('/');
-    const std::string home =
-        (slash3 == std::string::npos) ? libDir : libDir.substr(0, slash3);
-
-    std::vector<std::string> dirs;
-    dirs.push_back(libDir + "/jli");
-    dirs.push_back(libDir);
-    dirs.push_back(serverDir);
-    dirs.push_back(home + "/lib");
-    dirs.push_back(home + "/lib/jli");
-    dirs.push_back(home + "/lib/server");
-
-    std::vector<std::string> seen;
-    for (const auto& dir : dirs) {
-        DIR* d = opendir(dir.c_str());
-        if (!d) continue;
-        while (struct dirent* e = readdir(d)) {
-            const std::string name = e->d_name;
-            if (name.size() < 4) continue;
-            if (name.compare(name.size() - 3, 3, ".so") != 0) continue;
-            if (name == "libjvm.so") continue;  // caricata per ultima
-            const std::string full = dir + "/" + name;
-            if (std::find(seen.begin(), seen.end(), name) != seen.end()) continue;
-            seen.push_back(name);
-            // RTLD_LAZY: eventuali simboli JVM vengono risolti dopo libjvm.
-            void* h = dlopen(full.c_str(), RTLD_LAZY | RTLD_GLOBAL);
-            if (!h) {
-                const char* err = dlerror();
-                LOGI("preload %s: %s\n", name.c_str(), err ? err : "errore sconosciuto");
-            }
-        }
-        closedir(d);
-    }
-}
-
-// Funzione interna: avvia la JVM embedded e fa bootstrap (mod reali, ring,
-// tick 20 TPS, EngineSink). Condivisa tra BridgeService e MainActivity.
-// Restituisce true se successo, false su errore.
+// Internal function: starts the embedded JVM and bootstraps (real mods, ring,
+// tick 20 TPS, EngineSink). Shared between BridgeService and MainActivity.
+// Returns true on success, false on error.
 bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
                       const std::string& classpath, const std::string& mods,
                       const std::string& lut, const std::string& mapping,
                       const std::string& tmp) {
-    (void)env;  // la JVM embedded si aggancia da sola: env ART non serve qui
-    if (g_vm) return true;  // già avviata
+    if (g_vm) return true;  // already started
 
-    // 1. dlopen della JRE Android (NON linkata alla build: l'NDK non ha libjvm).
-    //    Il percorso è assoluto e nella memoria PRIVATA dell'app (filesDir):
-    //    da Android 10+ lo storage esterno non è caricabile con dlopen.
-    preloadJreLibs(jreLib);
+    // 1. dlopen of the Android JRE (NOT linked into the build: the NDK has no
+    //    libjvm). It is loaded with
+    //      dlopen at runtime from the Android JRE path (PojavLauncher-style).
     g_jvm_lib = dlopen(jreLib.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (!g_jvm_lib) {
-        const char* err = dlerror();
-        g_last_error = std::string("dlopen libjvm fallita: ") + (err ? err : "errore sconosciuto");
-        LOGE("%s\n", g_last_error.c_str());
+        LOGE("dlopen of libjvm failed: %s\n", dlerror());
         return false;
     }
     using CreateVmFn = jint (*)(JavaVM**, void**, void*);
     auto create_vm = reinterpret_cast<CreateVmFn>(dlsym(g_jvm_lib, "JNI_CreateJavaVM"));
     if (!create_vm) {
-        g_last_error = "JNI_CreateJavaVM non trovata in libjvm.so (JRE non valida?)";
-        LOGE("%s\n", g_last_error.c_str());
+        LOGE("JNI_CreateJavaVM not found in libjvm\n");
         return false;
     }
 
-    // 2. JVM headless nello stesso processo. tmpdir nella cache dell'app
-    //    (Scoped Storage: nessun permesso richiesto).
+    // 2. Headless JVM in the same process. tmpdir in the app cache
+    //    (Scoped Storage: no permission required).
     std::string cp = "-Djava.class.path=" + classpath;
     std::string tmpdir = "-Djava.io.tmpdir=" + tmp;
-
-    // java.home: impostato da Kotlin (JreInstaller.prepareEnv) sulla directory
-    // privata di estrazione; in fallback si ricava dal percorso di libjvm.so.
-    std::string home;
-    if (const char* envHome = std::getenv("STARLING_JRE_HOME")) {
-        home = envHome;
-    } else {
-        const size_t s1 = jreLib.find_last_of('/');
-        const std::string serverDir = (s1 == std::string::npos) ? "" : jreLib.substr(0, s1);
-        const size_t s2 = serverDir.find_last_of('/');
-        const std::string libDir = (s2 == std::string::npos) ? serverDir : serverDir.substr(0, s2);
-        const size_t s3 = libDir.find_last_of('/');
-        home = (s3 == std::string::npos) ? libDir : libDir.substr(0, s3);
-    }
-    std::string javaHome = "-Djava.home=" + home;
-    std::string bootLib = "-Dsun.boot.library.path=" + home + "/lib:" + home + "/lib/server";
-    std::string libPath = "-Djava.library.path=" + home + "/lib:" + home + "/lib/server:" +
-                          home + "/lib/jli";
-
-    JavaVMOption options[7];
+    JavaVMOption options[4];
     options[0].optionString = const_cast<char*>("-Djava.awt.headless=true");
     options[1].optionString = const_cast<char*>(cp.c_str());
     options[2].optionString = const_cast<char*>(tmpdir.c_str());
     options[3].optionString = const_cast<char*>("-Xss1m");
-    options[4].optionString = const_cast<char*>(javaHome.c_str());
-    options[5].optionString = const_cast<char*>(bootLib.c_str());
-    options[6].optionString = const_cast<char*>(libPath.c_str());
     JavaVMInitArgs args;
     args.version = JNI_VERSION_1_8;
-    args.nOptions = 7;
+    args.nOptions = 4;
     args.options = options;
     args.ignoreUnrecognized = JNI_FALSE;
 
     JNIEnv* jenv = nullptr;
-    const jint vmRc = create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args);
-    if (vmRc != JNI_OK || !jenv) {
-        g_last_error = "JNI_CreateJavaVM fallita (rc=" + std::to_string(vmRc) +
-                       "): JRE incompleta o java.home errato";
-        LOGE("%s\n", g_last_error.c_str());
+    if (create_vm(&g_vm, reinterpret_cast<void**>(&jenv), &args) != JNI_OK || !jenv) {
+        LOGE("JNI_CreateJavaVM failed\n");
         return false;
     }
 
-    // 3. Bootstrap nella JVM embedded: scansione mod (mapping.bin gate),
-    //    jar reali, ring, attach, tick 20 TPS, EngineSink.
+    // 3. Bootstrap in the embedded JVM: mods scan (mapping.bin gate),
+    //    real jars, ring, attach, tick 20 TPS, EngineSink.
     jclass bootstrap = jenv->FindClass("dev/starling/bridge/JvmBootstrap");
     if (!bootstrap || jenv->ExceptionCheck()) {
-        g_last_error = "JvmBootstrap non trovata nel classpath (bridge-u8.jar)";
-        LOGE("%s\n", g_last_error.c_str());
+        LOGE("JvmBootstrap not found in classpath\n");
         if (jenv->ExceptionCheck()) jenv->ExceptionClear();
         return false;
     }
@@ -200,8 +110,7 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     if (jenv->ExceptionCheck()) {
         jenv->ExceptionDescribe();
         jenv->ExceptionClear();
-        g_last_error = "JvmBootstrap.start fallita (mod/mapping non validi?)";
-        LOGE("%s\n", g_last_error.c_str());
+        LOGE("JvmBootstrap.start failed\n");
         return false;
     }
     g_bootstrap = static_cast<jclass>(jenv->NewGlobalRef(bootstrap));
@@ -211,7 +120,7 @@ bool startJvmEmbedded(JNIEnv* env, const std::string& jreLib,
     g_transport = static_cast<jclass>(jenv->NewGlobalRef(transport));
     g_poll = jenv->GetStaticMethodID(transport, "nativePoll", "(J)I");
 
-    LOGI("JVM headless avviata in-process, handle=%lld\n",
+    LOGI("Headless JVM started in-process, handle=%lld\n",
          static_cast<long long>(g_handle));
     return true;
 }
@@ -244,14 +153,14 @@ std::string to_std(JNIEnv* env, jstring s) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// API C per il motore Rust (FFI diretto, niente JNI su questo percorso)
+// C API for the Rust engine (direct FFI, no JNI on this path)
 // ---------------------------------------------------------------------------
 extern "C" {
 
 void starling_jvm_set_action_callback(ActionCb cb) { g_action_cb = cb; }
 
-// Chiamata dal render thread del motore, 1×/frame. Ritorna i byte consumati,
-// 0 se nulla da fare, -1 su errore (eccezione JNI già loggata e pulita).
+// Called from the engine render thread, 1×/frame. Returns the consumed bytes,
+// 0 if nothing to do, -1 on error (JNI exception already logged and cleared).
 int32_t starling_jvm_poll_frame(void) {
     if (!g_vm || !g_handle) return 0;
     JNIEnv* env = attach_env();
@@ -261,7 +170,7 @@ int32_t starling_jvm_poll_frame(void) {
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
         env->ExceptionClear();
-        LOGE("nativePoll: eccezione ( BridgeException: ID non mappato?)\n");
+        LOGE("nativePoll: exception ( BridgeException: unmapped ID?)\n");
         n = -1;
     }
     env->PopLocalFrame(nullptr);
@@ -279,14 +188,14 @@ void starling_jvm_stop(void) {
         }
     }
     g_handle = 0;
-    // La JVM resta viva per la vita del processo (DestroyJavaVM su Android
-    // è sconsigliato dalle JRE porting).
+    // The JVM stays alive for the lifetime of the process (DestroyJavaVM on
+    // Android is discouraged by the porting JRE).
 }
 
 }  // extern "C"
 
 // ---------------------------------------------------------------------------
-// JNI per BridgeService (runtime ART → crea la JVM embedded)
+// JNI for BridgeService (ART runtime → creates the embedded JVM)
 // ---------------------------------------------------------------------------
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_starling_app_BridgeService_nativeStart(
@@ -304,13 +213,7 @@ Java_dev_starling_app_BridgeService_nativeStart(
                : JNI_FALSE;
 }
 
-// Ultimo errore di avvio: la UI lo mostra invece di resettare in silenzio.
-extern "C" JNIEXPORT jstring JNICALL
-Java_dev_starling_app_MainActivity_nativeLastError(JNIEnv* env, jclass) {
-    return env->NewStringUTF(g_last_error.c_str());
-}
-
-// JNI per MainActivity (ART → avvio gioco diretto, stessa logica di BridgeService)
+// JNI for MainActivity (ART → direct game startup, same logic as BridgeService)
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_starling_app_MainActivity_nativeStartGame(
         JNIEnv* env, jclass,
@@ -333,7 +236,7 @@ Java_dev_starling_app_BridgeService_nativeStop(JNIEnv*, jclass) {
 }
 
 // ---------------------------------------------------------------------------
-// JNI per EngineSink (JVM embedded → callback C del motore Rust)
+// JNI for EngineSink (embedded JVM → C callback of the Rust engine)
 // ---------------------------------------------------------------------------
 extern "C" JNIEXPORT void JNICALL
 Java_dev_starling_bridge_EngineSink_nativeOnActions(

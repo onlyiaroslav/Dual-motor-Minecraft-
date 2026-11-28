@@ -140,11 +140,11 @@ pub enum AuthError {
 impl std::fmt::Display for AuthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "errore I/O auth: {e}"),
+            Self::Io(e) => write!(f, "auth I/O error: {e}"),
             Self::Protocol(m) => write!(f, "protocollo auth: {m}"),
-            Self::InvalidNickname(n) => write!(f, "nickname non valido: {n}"),
-            Self::Token(TokenError::NotFound) => write!(f, "codice inesistente o già usato"),
-            Self::Token(TokenError::Expired) => write!(f, "codice scaduto"),
+            Self::InvalidNickname(n) => write!(f, "invalid nickname: {n}"),
+            Self::Token(TokenError::NotFound) => write!(f, "code not found or already used"),
+            Self::Token(TokenError::Expired) => write!(f, "code expired"),
             Self::Denied(m) => write!(f, "accesso negato: {m}"),
         }
     }
@@ -223,13 +223,13 @@ impl OfflineAuthServer {
         friends: Arc<Mutex<FriendList>>,
     ) -> Result<Self, SocialError> {
         let listener = TcpListener::bind(config.bind_addr)
-            .map_err(|e| SocialError::Server(format!("bind {}: {e}", config.bind_addr)))?;
+            .map_err(|e| SocialError::Server(format!("failed to bind {}: {e}", config.bind_addr)))?;
         listener
             .set_nonblocking(true)
-            .map_err(|e| SocialError::Server(format!("nonblocking: {e}")))?;
+            .map_err(|e| SocialError::Server(format!("failed to start nonblocking listener: {e}")))?;
         let local_addr = listener
             .local_addr()
-            .map_err(|e| SocialError::Server(format!("local_addr: {e}")))?;
+            .map_err(|e| SocialError::Server(format!("failed to get local address: {e}")))?;
         Ok(Self {
             listener: Some(listener),
             config,
@@ -273,7 +273,7 @@ impl OfflineAuthServer {
         let listener = self
             .listener
             .take()
-            .ok_or_else(|| SocialError::Server("server già fermato: ricreare l'istanza".into()))?;
+            .ok_or_else(|| SocialError::Server("server already stopped: recreate the instance".into()))?;
         let config = self.config.clone();
         let tokens = Arc::clone(&self.tokens);
         let friends = Arc::clone(&self.friends);

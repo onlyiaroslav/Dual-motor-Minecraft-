@@ -32,7 +32,7 @@ pub enum AnalyzerError {
 impl fmt::Display for AnalyzerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "errore I/O analizzatore: {e}"),
+            Self::Io(e) => write!(f, "analyzer I/O error: {e}"),
             Self::Malformed(m) => write!(f, "jar malformato: {m}"),
         }
     }

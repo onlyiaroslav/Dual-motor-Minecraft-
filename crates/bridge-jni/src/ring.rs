@@ -77,37 +77,37 @@ impl RingConsumer {
     /// `base` deve puntare a `len` byte validi, mappati e allineati a 8.
     pub unsafe fn attach(base: *mut u8, len: usize) -> Result<Self, BridgeError> {
         if base.is_null() {
-            return Err(BridgeError::InvalidRing("puntatore nullo".into()));
+            return Err(BridgeError::InvalidRing("null pointer".into()));
         }
         if (base as usize) % 8 != 0 {
             return Err(BridgeError::InvalidRing(
-                "base non allineata a 8 byte (rischio SIGBUS su aarch64)".into(),
+                "base not aligned to 8 bytes (SIGBUS risk on aarch64)".into(),
             ));
         }
         if len < HEADER_LEN + 16 {
-            return Err(BridgeError::InvalidRing("regione troppo piccola".into()));
+            return Err(BridgeError::InvalidRing("region too small".into()));
         }
         let magic = (base as *const u32).read_unaligned();
         if magic != RING_MAGIC {
             return Err(BridgeError::InvalidRing(format!(
-                "magic non valido: 0x{magic:08X} (atteso 0x{RING_MAGIC:08X})"
+                "invalid magic: 0x{magic:08X} (expected 0x{RING_MAGIC:08X})"
             )));
         }
         let version = (base.add(4) as *const u32).read_unaligned();
         if version != RING_VERSION {
             return Err(BridgeError::InvalidRing(format!(
-                "versione non supportata: {version}"
+                "version not supported: {version}"
             )));
         }
         let capacity = (base.add(8) as *const u32).read_unaligned() as usize;
         if capacity < 16 || !capacity.is_power_of_two() {
             return Err(BridgeError::InvalidRing(format!(
-                "capacità non valida: {capacity} (potenza di 2, >= 16)"
+                "invalid capacity: {capacity} (power of 2, >= 16)"
             )));
         }
         if capacity > len - HEADER_LEN {
             return Err(BridgeError::InvalidRing(
-                "capacità maggiore della regione mappata".into(),
+                "capacity greater than the mapped region".into(),
             ));
         }
         Ok(Self {

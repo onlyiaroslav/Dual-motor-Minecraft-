@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#121212</color>
-    <!-- Sfondo del tema di avvio (allineato a DogeBackground in Theme.kt):
-         referenziato da values/themes.xml. -->
-    <color name="doge_background">#121214</color>
 </resources>

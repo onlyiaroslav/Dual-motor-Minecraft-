@@ -1,7 +1,6 @@
 package dev.starling.app
 
 import android.content.Intent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,35 +32,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
-// Sezioni: quelle originali di Starling + Mod & Upgrade di Doge Client.
+// Navigation screens
 // ---------------------------------------------------------------------------
-enum class Screen(val label: String, val emoji: String) {
-    Home("Home", "🏠"),
-    Mods("Mod", "🧩"),
-    Friends("Amici", "🐕"),
-    Settings("Impostazioni", "⚙️"),
+enum class Screen(val id: Int) {
+    Home(0),
+    Mods(1),
+    Friends(2),
+    Settings(3)
 }
 
 // ---------------------------------------------------------------------------
-// Bottom Navigation Material 3 in stile launcher gaming
+// Bottom Navigation Material 3 in launcher gaming style
 // ---------------------------------------------------------------------------
 @Composable
 private fun DogeBottomNavigation(
     selectedScreen: Screen,
-    onItemClick: (Screen) -> Unit,
+    onItemClick: (Screen) -> Unit
 ) {
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = DogePrimary,
@@ -104,19 +97,19 @@ private fun DogeBottomNavigation(
 }
 
 // ---------------------------------------------------------------------------
-// MainScreen — Home del launcher Doge Client
+// MainScreen — Home of the Doge Client launcher
 // ---------------------------------------------------------------------------
 @Composable
 fun MainScreen(
-    onStartGame: () -> Unit = { /* Placeholder: collegare a nativeStartGame() */ },
+    onStartGame: () -> Unit = { /* Placeholder: wire to nativeStartGame() */ },
     onNavigateToMods: () -> Unit = { },
     onNavigateToFriends: () -> Unit = { },
     onNavigateToSettings: () -> Unit = { },
 ) {
     val context = LocalContext.current
 
-    // Home rimane attiva; Amici/Impostazioni aprono le Activity esistenti
-    // (invariate) tramite Intent, senza riscriverle.
+    // Home stays active; Friends/Settings open the existing Activities
+    // (unchanged) via Intent, without rewriting them.
     var selectedScreen by rememberSaveable { mutableStateOf(Screen.Home) }
 
     Scaffold(
@@ -127,16 +120,16 @@ fun MainScreen(
                 onItemClick = { screen ->
                     selectedScreen = screen
                     when (screen) {
-                        Screen.Home -> { /* già in home */ }
+                        Screen.Home -> { /* already on Home */ }
                         Screen.Mods -> onNavigateToMods()
                         Screen.Friends -> {
-                            // Schermata Amici esistente (Fase 6): lista amici, token,
-                            // LAN invite. Invocata così com'è, nessuna regressione.
+                            // Existing Friends screen (Phase 6): friend list, token,
+                            // LAN invite. Invoked as is, no regression.
                             context.startActivity(Intent(context, FriendsActivity::class.java))
                         }
                         Screen.Settings -> {
-                            // Schermata Impostazioni esistente (Fase 7): toggle AI Locale,
-                            // endpoint, conversione JAR. Invocata così com'è.
+                            // Existing Settings screen (Phase 7): AI Local toggle,
+                            // endpoint, JAR conversion. Invoked as is.
                             context.startActivity(Intent(context, SettingsActivity::class.java))
                         }
                     }
@@ -151,7 +144,7 @@ fun MainScreen(
                 .background(DogeBackground)
         ) {
             // -----------------------------------------------------------------
-            // Header: logo a sinistra, avatar a destra (stile arcade/gaming)
+            // Header: logo on the left, avatar on the right (arcade/gaming style)
             // -----------------------------------------------------------------
             Row(
                 modifier = Modifier
@@ -172,15 +165,12 @@ fun MainScreen(
                         .size(52.dp)
                         .clip(CircleShape)
                         .background(DogeSecondary)
-                        .clickable { /* apri profilo utente */ },
+                        .clickable { /* open user profile */ },
                     contentAlignment = Alignment.Center
                 ) {
-                    // Avatar Doge (vector drawable, unica risorsa doge_avatar).
-                    Image(
-                        painter = painterResource(R.drawable.doge_avatar),
-                        contentDescription = "Avatar Doge",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                    Text(
+                        text = "🐶",
+                        fontSize = 26.sp
                     )
                 }
             }
@@ -188,18 +178,18 @@ fun MainScreen(
             Spacer(modifier = Modifier.weight(0.4f))
 
             // -----------------------------------------------------------------
-            // Centro: pulsante Play circolare con glow/ombra gialla
+            // Center: circular Play button with glow/shadow
             // -----------------------------------------------------------------
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Contenitore per l'effetto glow attorno al pulsante
+                // Container for the glow effect around the button
                 Box(
                     modifier = Modifier.size(132.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Anelli glow gialli traslucidi dietro il pulsante
+                    // Translucent yellow glow rings behind the button
                     Box(
                         modifier = Modifier
                             .size(124.dp)

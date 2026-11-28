@@ -1,923 +1,318 @@
 package dev.starling.app
 
-import android.content.Context
+import android.graphics.Color
 import android.os.Bundle
+import android.text.InputType
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Switch
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
-import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.starling.converter.AiConverterBridge
-import dev.starling.packs.PackGate
-import dev.starling.packs.PackImporter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Schermata "Impostazioni" (Fase 7) in Compose.
+ * Settings screen of the Starling launcher (Phase 7).
  *
- * La logica nativa è invariata: [AiConverterBridge] espone il toggle AI locale
- * e la conversione JAR. Qui cambia solo la UI (card, switch e campi dark).
+ * Exposes the **"AI Local for Mod Conversion"** toggle:
+ *  - ENABLED: the local AI server (SmolLM2 via HTTP, OpenAI-compatible API)
+ *    translates unknown APIs and updates `mapping.bin`;
+ *  - DISABLED: the tool does not use the AI, it only uses the existing
+ *    library (`mapping.bin`) and discards unknown APIs by logging "AI disabled";
+ *  - server not reachable or timeout ⇒ fallback, as if it were disabled.
+ *
+ * Privacy (zero code copied): the conversion produces only the dictionary
+ * `mapping.bin` and the log `conversion_log.json`. No bytecode or asset is
+ * kept/exported, no upload: everything stays on the device.
+ *
+ * Additional layer: it does not touch the 8-bit bridge, the game loop or the social layer.
+ *
+ * Android packaging: include `libmod_converter.so` in
+ * `src/main/jniLibs/arm64-v8a/` (produced by
+ * `cargo ndk ... build --package mod-converter --features jni`) and the
+ * `dev.starling.converter.AiConverterBridge` class in the APK. The SmolLM2 model runs
+ * in a local OpenAI-compatible server (e.g. `llama-server`) on
+ * `http://127.0.0.1:8080`; the endpoint is overridable with the preference
+ * `ai_locale_endpoint`.
  */
 class SettingsActivity : ComponentActivity() {
+
+    companion object {
+        private const val PREFS = "starling_settings"
+        private const val KEY_AI_MOD = "ai_locale_conversione_mod"
+        private const val KEY_AI_ENDPOINT = "ai_locale_endpoint"
+        private const val KEY_AI_AUTO_START = "ai_auto_start_server"
+        private const val KEY_AI_SERVER_EXE = "ai_server_exe_path"
+        private const val KEY_AI_MODEL_PATH = "ai_model_path"
+        private const val DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
+        private const val DEFAULT_SERVER_EXE = "llama-server"
+        private const val DEFAULT_MODEL = "smollm2-360m-instruct-q4_k_m.gguf"
+        private const val AI_ASSET_DIR = "ai"
+        private const val LIBRARY_REL = "mapping.bin"
+        private const val OUT_REL = "conversion"
+    }
+
+    private lateinit var converter: AiConverterBridge
+    private lateinit var aiSwitch: Switch
+    private lateinit var aiAutoStartSwitch: Switch
+    private lateinit var statusView: TextView
+    private lateinit var jarInput: EditText
+    private lateinit var exeInput: EditText
+    private lateinit var modelInput: EditText
+    private lateinit var resultView: TextView
+
+    private var endpoint: String = DEFAULT_ENDPOINT
+    private lateinit var libraryFile: File
+    private lateinit var outDir: File
+
+    // --- Embedded local AI server (automatic startup, zero-config) ---
+    private var aiAutoStart = false
+    private var serverExe = DEFAULT_SERVER_EXE
+    private var modelPath = DEFAULT_MODEL
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+
+        val base = getExternalFilesDir(null)
+        libraryFile = File(base, LIBRARY_REL)
+        outDir = File(base, OUT_REL)
+
+        // The AI is driven by the saved preference (default: disabled).
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val aiEnabled = prefs.getBoolean(KEY_AI_MOD, false)
+        endpoint = prefs.getString(KEY_AI_ENDPOINT, DEFAULT_ENDPOINT) ?: DEFAULT_ENDPOINT
+
+        // Embedded server preferences (zero-config local AI).
+        aiAutoStart = prefs.getBoolean(KEY_AI_AUTO_START, false)
+        serverExe = prefs.getString(KEY_AI_SERVER_EXE, DEFAULT_SERVER_EXE) ?: DEFAULT_SERVER_EXE
+        modelPath = prefs.getString(KEY_AI_MODEL_PATH, DEFAULT_MODEL) ?: DEFAULT_MODEL
+
+        converter = AiConverterBridge(
+            endpoint,
+            if (libraryFile.exists()) libraryFile.absolutePath else ""
         )
-        setContent {
-            DogeTheme {
-                DogeScreenBackground {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .systemBarsPadding()
-                    ) {
-                        SettingsContent()
-                    }
-                }
-            }
-        }
-    }
-}
 
-private const val PREFS = "starling_settings"
-private const val KEY_AI_MOD = "ai_locale_conversione_mod"
-private const val KEY_AI_ENDPOINT = "ai_locale_endpoint"
-private const val KEY_AI_AUTO_START = "ai_auto_start_server"
-private const val KEY_AI_SERVER_EXE = "ai_server_exe_path"
-private const val KEY_AI_MODEL_PATH = "ai_model_path"
-private const val DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
-private const val LIBRARY_REL = "mapping.bin"
-private const val OUT_REL = "conversion"
-private const val KEY_XRAY = "doge_xray"
-private const val KEY_ENGINE_OPT = "doge_engine_optimizations"
-private const val PACK_FORMAT = 34
+        setContentView(buildUi())
 
-@Composable
-fun SettingsContent(modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val prefs = remember { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+        aiSwitch.isChecked = aiEnabled
+        aiAutoStartSwitch.isChecked = aiAutoStart
+        exeInput.setText(serverExe)
+        modelInput.setText(modelPath)
+        // Apply the initial state to the native layer and update the status.
+        applyAiState(aiEnabled)
 
-    var aiEnabled by remember { mutableStateOf(prefs.getBoolean(KEY_AI_MOD, false)) }
-    var autoStart by remember { mutableStateOf(prefs.getBoolean(KEY_AI_AUTO_START, false)) }
-    var endpoint by remember {
-        mutableStateOf(prefs.getString(KEY_AI_ENDPOINT, DEFAULT_ENDPOINT) ?: DEFAULT_ENDPOINT)
-    }
-    var serverExe by remember {
-        mutableStateOf(
-            prefs.getString(KEY_AI_SERVER_EXE, AiLocalServer.DEFAULT_SERVER_EXE)
-                ?: AiLocalServer.DEFAULT_SERVER_EXE
-        )
-    }
-    var modelPath by remember {
-        mutableStateOf(
-            prefs.getString(KEY_AI_MODEL_PATH, AiLocalServer.DEFAULT_MODEL)
-                ?: AiLocalServer.DEFAULT_MODEL
-        )
-    }
-
-    var converter by remember { mutableStateOf<AiConverterBridge?>(null) }
-    var status by remember { mutableStateOf("Inizializzazione convertitore…") }
-    var jarPath by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var manifestUrl by remember { mutableStateOf(GameInstaller.manifestUrl(ctx)) }
-    var refresh by remember { mutableIntStateOf(0) }
-
-    // --- Toggle specifici di Doge Client -------------------------------
-    var xrayEnabled by remember { mutableStateOf(prefs.getBoolean(KEY_XRAY, false)) }
-    var engineOptimized by remember { mutableStateOf(prefs.getBoolean(KEY_ENGINE_OPT, true)) }
-    var showXrayWarning by remember { mutableStateOf(false) }
-
-    // --- Import texture pack (core PackImporter, anti-loop PackGate) ------
-    var packMessage by remember { mutableStateOf<String?>(null) }
-    var packError by remember { mutableStateOf(false) }
-    var packBusy by remember { mutableStateOf(false) }
-    var installedPacks by remember { mutableStateOf<List<File>>(emptyList()) }
-
-    // --- Runtime Java caricabile dall'utente (senza ricompilare l'APK) ----
-    var runtimeMessage by remember { mutableStateOf<String?>(null) }
-    var runtimeError by remember { mutableStateOf(false) }
-    var runtimeBusy by remember { mutableStateOf(false) }
-    var runtimeUrl by rememberSaveable { mutableStateOf(JreInstaller.DEFAULT_JRE_URL) }
-    var runtimeProgress by remember { mutableStateOf<InstallState?>(null) }
-
-    val runtimePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                runtimeBusy = true
-                val result = withContext(Dispatchers.IO) {
-                    val name = packDisplayName(ctx, uri)
-                    val input = ctx.contentResolver.openInputStream(uri)
-                    if (input == null) {
-                        Result.failure(IllegalStateException("impossibile aprire il file selezionato"))
-                    } else {
-                        input.use { JreInstaller.install(ctx, it, name) }
-                    }
-                }
-                runtimeBusy = false
-                result
-                    .onSuccess {
-                        runtimeMessage = "Runtime pronto: ${it.absolutePath}"
-                        runtimeError = false
-                        refresh++
-                    }
-                    .onFailure {
-                        runtimeMessage = it.message ?: "Installazione runtime fallita"
-                        runtimeError = true
-                    }
-            }
+        // Start the local AI server in the background if requested (zero-config).
+        if (aiAutoStart) {
+            startEmbeddedAiServerIfNeeded()
         }
     }
 
-    val packPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                packBusy = true
-                val result = withContext(Dispatchers.IO) {
-                    try {
-                        val packsDir = File(
-                            ctx.getExternalFilesDir(null) ?: ctx.filesDir,
-                            "resourcepacks",
-                        ).apply { mkdirs() }
-                        val name = packDisplayName(ctx, uri)
-                        val input = ctx.contentResolver.openInputStream(uri)
-                            ?: throw IllegalStateException("impossibile aprire il file selezionato")
-                        input.use {
-                            PackImporter().importZip(it, packsDir.toPath(), name, PACK_FORMAT)
-                        }
-                    } catch (e: Exception) {
-                        dev.starling.packs.Result.fail(
-                            "${e.javaClass.simpleName}: ${e.message ?: "importazione fallita"}"
-                        )
-                    }
-                }
-                packBusy = false
-                val gate = PackGate()
-                installedPacks = withContext(Dispatchers.IO) { listPacks(ctx) }
-                if (result.ok) {
-                    gate.onExternalPackValid()
-                    val dir = result.packDir?.toFile()
-                    val files = dir?.walkTopDown()?.count { it.isFile } ?: 0
-                    packMessage = "Pack importato: ${result.packDir?.fileName} ($files file estratti)"
-                    packError = false
-                } else {
-                    // Pack scartato: nessun restart dei download (anti-loop).
-                    gate.onExternalPackInvalid(result.error ?: "errore sconosciuto")
-                    packMessage = "Pack scartato: ${result.error}"
-                    packError = true
-                }
-            }
+    private fun buildUi(): LinearLayout {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 48, 48, 24)
+        }
+
+        root.addView(TextView(this).apply {
+            text = "Settings"
+            textSize = 26f
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Mod conversion"
+            textSize = 18f
+            setPadding(0, 32, 0, 8)
+        })
+
+        aiSwitch = Switch(this).apply {
+            text = "AI Local for Mod Conversion"
+            textSize = 16f
+            setOnCheckedChangeListener { _, isChecked -> onAiToggled(isChecked) }
+        }
+        root.addView(aiSwitch)
+
+        // --- Embedded local AI server (automatic startup) ---
+        aiAutoStartSwitch = Switch(this).apply {
+            text = "Automatically start local AI server"
+            textSize = 14f
+        }
+        root.addView(aiAutoStartSwitch)
+
+        exeInput = EditText(this).apply {
+            hint = "AI server executable (e.g. llama-server)"
+            text = serverExe
+            inputType = InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setSingleLine()
+        }
+        root.addView(exeInput)
+
+        modelInput = EditText(this).apply {
+            hint = "GGUF model (e.g. smollm2-360m-instruct-q4_k_m.gguf)"
+            text = modelPath
+            inputType = InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setSingleLine()
+        }
+        root.addView(modelInput)
+
+        statusView = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.GRAY)
+            setPadding(0, 8, 0, 8)
+        }
+        root.addView(statusView)
+
+        root.addView(TextView(this).apply {
+            text = "If enabled, the local AI server (SmolLM2 via HTTP) translates " +
+                "unknown APIs and updates mapping.bin. If disabled, only the existing " +
+                "library is used and unknown APIs are discarded " +
+                "(log: \"AI disabled\"). Server not reachable or timeout ⇒ fallback. " +
+                "No code or assets are copied or sent: everything stays on the device."
+            textSize = 12f
+            setTextColor(Color.GRAY)
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Convert a JAR"
+            textSize = 18f
+            setPadding(0, 32, 0, 8)
+        })
+
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        jarInput = EditText(this).apply {
+            hint = "Path of the .jar file"
+            inputType = InputType.TYPE_CLASS_TEXT
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setSingleLine()
+        }
+        row.addView(jarInput)
+        row.addView(Button(this).apply {
+            text = "Convert"
+            setOnClickListener { convert() }
+        })
+        root.addView(row)
+
+        resultView = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.GRAY)
+            setPadding(0, 8, 0, 0)
+        }
+        root.addView(resultView)
+
+        return root
+    }
+
+    /** Persists the preference and applies the toggle to the native layer. */
+    private fun onAiToggled(enabled: Boolean) {
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AI_MOD, enabled)
+            .apply()
+        applyAiState(enabled)
+    }
+
+    private fun applyAiState(enabled: Boolean) {
+        val state = try {
+            converter.setAiEnabled(enabled)
+        } catch (e: IllegalStateException) {
+            "error"
+        }
+        statusView.text = describeState(state)
+    }
+
+    private fun describeState(state: String): String {
+        return when (state) {
+            "ready" -> "AI is active and ready (local server: $endpoint)."
+            "not_ready" -> "AI is active but the server is not reachable ($endpoint): AI fallback."
+            "disarmed" -> "AI disabled: conversion uses only the mapping.bin library."
+            else -> "AI state: $state"
         }
     }
 
-    LaunchedEffect(Unit) {
-        installedPacks = withContext(Dispatchers.IO) { listPacks(ctx) }
-    }
-
-    fun downloadJre(url: String) {
-        scope.launch {
-            runtimeBusy = true
-            runtimeProgress = null
-            val result = withContext(Dispatchers.IO) {
-                JreInstaller.downloadAndInstall(
-                    ctx,
-                    url,
-                    url.substringAfterLast('/').ifBlank { JreInstaller.DEFAULT_JRE_NAME },
-                ) { state -> runtimeProgress = state }
-            }
-            runtimeBusy = false
-            result
-                .onSuccess {
-                    runtimeMessage = "Runtime pronto: ${it.absolutePath}"
-                    runtimeError = false
-                    refresh++
-                }
-                .onFailure {
-                    runtimeMessage = it.message ?: "Download del runtime fallito"
-                    runtimeError = true
-                }
-        }
-    }
-
-    fun libraryPath(): String {
-        val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val library = File(base, LIBRARY_REL)
-        return if (library.exists()) library.absolutePath else ""
-    }
-
-    fun buildConverter(): Result<AiConverterBridge> =
-        runCatching { AiConverterBridge(endpoint, libraryPath()) }
-
-    fun applyAiState(enabled: Boolean) {
-        val bridge = converter
-        scope.launch {
-            val state = if (bridge == null) {
-                "errore"
-            } else {
-                withContext(Dispatchers.IO) {
-                    runCatching { bridge.setAiEnabled(enabled) }.getOrElse { "errore" }
-                }
-            }
-            status = describeAiState(state, endpoint)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        val built = withContext(Dispatchers.IO) { buildConverter() }
-        built.onSuccess { bridge ->
-            converter = bridge
-            val state = withContext(Dispatchers.IO) {
-                runCatching { bridge.setAiEnabled(aiEnabled) }.getOrElse { "errore" }
-            }
-            status = describeAiState(state, endpoint)
-        }
-        built.onFailure {
-            status = "Convertitore non disponibile: ${it.message}"
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            converter?.let { bridge -> runCatching { bridge.close() } }
-        }
-    }
-
-    fun reconnect() {
-        scope.launch {
-            busy = true
-            converter?.let { runCatching { it.close() } }
-            val built = withContext(Dispatchers.IO) { buildConverter() }
-            busy = false
-            built.onSuccess { bridge ->
-                converter = bridge
-                val state = withContext(Dispatchers.IO) {
-                    runCatching { bridge.setAiEnabled(aiEnabled) }.getOrElse { "errore" }
-                }
-                status = describeAiState(state, endpoint)
-            }
-            built.onFailure {
-                converter = null
-                status = "Convertitore non disponibile: ${it.message}"
-            }
-        }
-    }
-
-    fun convertJar() {
-        val bridge = converter
-        if (bridge == null) {
-            result = "Convertitore non disponibile."
-            return
-        }
-        val path = jarPath.trim()
+    private fun convert() {
+        val path = jarInput.text.toString().trim()
         if (path.isEmpty()) {
-            result = "Inserisci il percorso di un file .jar"
+            toast("Enter the path of a .jar file")
             return
         }
         val jar = File(path)
         if (!jar.exists()) {
-            result = "File non trovato: $path"
+            toast("File not found: $path")
             return
         }
-        val outDir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, OUT_REL)
-        scope.launch {
-            busy = true
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching { bridge.convertJar(jar.absolutePath, outDir.absolutePath) }
-            }
-            busy = false
-            outcome
-                .onSuccess {
-                    result = "Conversione completata.\n$it\nOutput: ${outDir.absolutePath}"
-                    toast(ctx, "mapping.bin e conversion_log.json generati")
-                }
-                .onFailure {
-                    result = "Errore conversione: ${it.message}"
-                }
+        try {
+            val summary = converter.convertJar(jar.absolutePath, outDir.absolutePath)
+            resultView.text = "Conversion completed.\n$summary\nOutput: ${outDir.absolutePath}"
+            toast("mapping.bin and conversion_log.json generated")
+        } catch (e: IllegalStateException) {
+            resultView.text = "Conversion error: ${e.message}"
+            toast("Conversion failed: ${e.message}")
         }
     }
 
-    val runtime = remember(refresh) { GameInstaller.effectiveRuntimeLib(ctx) }
-    val bridgeJar = remember(refresh) { GameInstaller.bridgeJar(ctx) }
-    val modsDir = remember(refresh) {
-        File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "mods")
-    }
-    val modCount = remember(refresh) {
-        modsDir.listFiles { file -> file.isFile && file.extension.equals("jar", true) }?.size ?: 0
+    private fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
-    Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Impostazioni",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = DogeTextPrimary,
-                )
-                Text(
-                    "AI locale, conversione mod e file di gioco",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DogeTextSecondary,
-                )
-            }
-            DogePill(
-                text = if (aiEnabled) "AI ATTIVA" else "AI OFF",
-                color = if (aiEnabled) DogeSuccess else DogeTextSecondary,
-            )
+    // -----------------------------------------------------------------------
+    // Embedded local AI server: automatic startup (zero user config)
+    // -----------------------------------------------------------------------
+
+    /** Starts the local AI server as a child process if not already listening.
+     *  Looks for the executable and the model in the assets (ai/*) if they are not
+     *  yet present in the app's private storage. */
+    private fun startEmbeddedAiServerIfNeeded() {
+        val exeFile = extractAssetIfNeeded(serverExe, "$AI_ASSET_DIR/${serverExe.split("/").last()}")
+        val modelFile = extractAssetIfNeeded(modelPath, "$AI_ASSET_DIR/${modelPath.split("/").last()}")
+
+        if (!exeFile.exists()) {
+            statusView.text = "AI executable not found: $exeFile"
+            return
+        }
+        if (!modelFile.exists()) {
+            statusView.text = "AI model not found: $modelFile"
+            return
         }
 
-        // --- Toggle Doge Client -------------------------------------------
-        DogeCard {
-            DogeSectionTitle("Doge Client")
-            Spacer(Modifier.height(10.dp))
-
-            ToggleRow(
-                title = "X-Ray",
-                subtitle = "Visibilità attraverso i blocchi",
-                checked = xrayEnabled,
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        showXrayWarning = true
-                    } else {
-                        xrayEnabled = false
-                        prefs.edit().putBoolean(KEY_XRAY, false).apply()
-                    }
-                },
+        try {
+            val pb = ProcessBuilder(
+                exeFile.absolutePath,
+                "-m", modelFile.absolutePath,
+                "--host", "127.0.0.1",
+                "--port", "8080",
+                "-c", "512"
             )
-
-            ToggleRow(
-                title = "Ottimizzazioni motore Rust",
-                subtitle = "Tick e render ottimizzati per il bridge nativo",
-                checked = engineOptimized,
-                onCheckedChange = { enabled ->
-                    engineOptimized = enabled
-                    prefs.edit().putBoolean(KEY_ENGINE_OPT, enabled).apply()
-                },
-            )
-
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "X-Ray è pensato per singleplayer e server privati di tua proprietà.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 12.sp,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // --- AI locale -----------------------------------------------------
-        DogeCard {
-            DogeSectionTitle("Conversione mod")
-            Spacer(Modifier.height(10.dp))
-
-            ToggleRow(
-                title = "AI locale per conversione mod",
-                subtitle = "Traduce le API sconosciute e aggiorna mapping.bin",
-                checked = aiEnabled,
-                onCheckedChange = { enabled ->
-                    aiEnabled = enabled
-                    prefs.edit().putBoolean(KEY_AI_MOD, enabled).apply()
-                    applyAiState(enabled)
-                },
-            )
-
-            ToggleRow(
-                title = "Avvia server AI automaticamente",
-                subtitle = "llama-server su 127.0.0.1:8080 all'avvio",
-                checked = autoStart,
-                onCheckedChange = { enabled ->
-                    autoStart = enabled
-                    prefs.edit().putBoolean(KEY_AI_AUTO_START, enabled).apply()
-                    if (enabled) {
-                        scope.launch {
-                            val started = withContext(Dispatchers.IO) {
-                                AiLocalServer.startIfNeeded(ctx, serverExe, modelPath)
-                            }
-                            started
-                                .onSuccess { status = it }
-                                .onFailure { status = "Server AI: ${it.message}" }
-                        }
-                    }
-                },
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            DogeTextField(
-                value = endpoint,
-                onValueChange = {
-                    endpoint = it
-                    prefs.edit().putString(KEY_AI_ENDPOINT, it).apply()
-                },
-                label = "Endpoint AI (OpenAI-compatible)",
-                placeholder = DEFAULT_ENDPOINT,
-                keyboardType = KeyboardType.Uri,
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            DogeTextField(
-                value = serverExe,
-                onValueChange = {
-                    serverExe = it
-                    prefs.edit().putString(KEY_AI_SERVER_EXE, it).apply()
-                },
-                label = "Eseguibile server AI",
-                placeholder = AiLocalServer.DEFAULT_SERVER_EXE,
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            DogeTextField(
-                value = modelPath,
-                onValueChange = {
-                    modelPath = it
-                    prefs.edit().putString(KEY_AI_MODEL_PATH, it).apply()
-                },
-                label = "Modello GGUF",
-                placeholder = AiLocalServer.DEFAULT_MODEL,
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            DogeGhostButton(
-                text = "Riconnetti AI",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !busy,
-                onClick = { reconnect() },
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(DogePrimary))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    status,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DogeTextSecondary,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // --- Conversione JAR ----------------------------------------------
-        DogeCard {
-            DogeSectionTitle("Converti un JAR")
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Genera mapping.bin e conversion_log.json nella cartella conversion/. " +
-                    "Nessun bytecode viene conservato o inviato.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.height(12.dp))
-            DogeTextField(
-                value = jarPath,
-                onValueChange = { jarPath = it },
-                label = "Percorso del file .jar",
-                placeholder = "/storage/emulated/0/Download/mod.jar",
-                keyboardType = KeyboardType.Uri,
-            )
-            Spacer(Modifier.height(10.dp))
-            DogePrimaryButton(
-                text = "Converti",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !busy,
-                onClick = { convertJar() },
-            )
-            val current = result
-            if (current != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    current,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (current.startsWith("Errore")) DogeDanger else DogeSuccess,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // --- File di gioco ------------------------------------------------
-        DogeCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                DogeSectionTitle("File di gioco")
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "AGGIORNA",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = DogePrimary,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(DogePrimary.copy(alpha = 0.12f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                        .clickable { refresh++ },
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-
-            StatusRow(
-                label = "Runtime Java (memoria privata)",
-                ok = runtime.exists(),
-                detail = if (runtime.exists()) formatMb(runtime.length()) else "mancante",
-            )
-            StatusRow(
-                label = "Bridge Java (bridge-u8.jar)",
-                ok = bridgeJar.exists(),
-                detail = if (bridgeJar.exists()) formatMb(bridgeJar.length()) else "mancante",
-            )
-            StatusRow(
-                label = "Mod installate",
-                ok = true,
-                detail = modCount.toString(),
-            )
-            DogeInfoRow("Cartella giochi", "minecraft/")
-            DogeInfoRow("Versione", GameInstaller.MC_VERSION)
-
-            Spacer(Modifier.height(12.dp))
-
-            DogeTextField(
-                value = manifestUrl,
-                onValueChange = {
-                    manifestUrl = it
-                    GameInstaller.setManifestUrl(ctx, it)
-                },
-                label = "Manifest download (opzionale)",
-                placeholder = "https://…/manifest.json",
-                keyboardType = KeyboardType.Uri,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Se impostato, il pulsante Gioca scarica i file elencati nel manifest " +
-                    "mostrando MB e percentuale. Vuoto = verifica dei soli file locali.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 11.sp,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // --- Runtime Java --------------------------------------------------
-        DogeCard {
-            DogeSectionTitle("Runtime Java")
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Carica un archivio JRE Android arm64 (.tar.xz o .zip): viene estratto " +
-                    "nella memoria privata dell'app. Da Android 10+ le librerie non " +
-                    "possono essere caricate dallo storage esterno.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.height(10.dp))
-            DogeInfoRow(
-                "Runtime attivo",
-                if (runtime.exists()) formatMb(runtime.length()) else "mancante",
-                if (runtime.exists()) DogeSuccess else DogeDanger,
-            )
-            DogeInfoRow("Percorso", runtime.absolutePath)
-            Spacer(Modifier.height(12.dp))
-            DogePrimaryButton(
-                text = "Scarica JRE 17 (consigliato)",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !runtimeBusy,
-                onClick = { downloadJre(JreInstaller.DEFAULT_JRE_URL) },
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "PojavLauncher · jre17-arm64 · ~50 MB, estratto in memoria privata.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 11.sp,
-            )
-            Spacer(Modifier.height(12.dp))
-            DogeGhostButton(
-                text = "Carica JRE (.tar.xz / .zip)",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !runtimeBusy,
-                onClick = { runtimePicker.launch(arrayOf("*/*")) },
-            )
-            Spacer(Modifier.height(12.dp))
-            DogeTextField(
-                value = runtimeUrl,
-                onValueChange = { runtimeUrl = it },
-                label = "Oppure URL dell'archivio JRE",
-                placeholder = "https://…/jre17-arm64.tar.xz",
-                keyboardType = KeyboardType.Uri,
-            )
-            Spacer(Modifier.height(10.dp))
-            DogeGhostButton(
-                text = "Scarica runtime",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !runtimeBusy && runtimeUrl.isNotBlank(),
-                onClick = { downloadJre(runtimeUrl) },
-            )
-            val progress = runtimeProgress
-            if (progress != null && progress.running) {
-                Spacer(Modifier.height(10.dp))
-                LinearProgressIndicator(
-                    progress = { (progress.percent / 100f).coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp),
-                    color = DogePrimary,
-                    trackColor = DogeOutline,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "${progress.percent}% · ${formatMb(progress.downloaded)} / " +
-                        formatMb(progress.total),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DogeTextSecondary,
-                    fontSize = 11.sp,
-                )
-            }
-            val currentRuntimeMessage = runtimeMessage
-            if (currentRuntimeMessage != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    currentRuntimeMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (runtimeError) DogeDanger else DogeSuccess,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // --- Texture pack --------------------------------------------------
-        DogeCard {
-            DogeSectionTitle("Texture pack")
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Importa un .zip: viene estratto in resourcepacks/ con pack.mcmeta " +
-                    "generato se assente o corretto se manca pack_format.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.height(12.dp))
-            DogePrimaryButton(
-                text = "Importa pack",
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !packBusy,
-                onClick = {
-                    packPicker.launch(
-                        arrayOf(
-                            "application/zip",
-                            "application/x-zip-compressed",
-                            "application/octet-stream",
-                            "*/*",
-                        )
-                    )
-                },
-            )
-            val currentPackMessage = packMessage
-            if (currentPackMessage != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    currentPackMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (packError) DogeDanger else DogeSuccess,
-                    fontSize = 12.sp,
-                )
-            }
-            if (installedPacks.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                DogeSectionTitle("Pack estratti")
-                Spacer(Modifier.height(6.dp))
-                installedPacks.forEach { dir ->
-                    DogeInfoRow(
-                        dir.name,
-                        if (File(dir, "pack.mcmeta").exists()) "pronto" else "senza mcmeta",
-                        if (File(dir, "pack.mcmeta").exists()) DogeSuccess else DogeTextSecondary,
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        DogeCard {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    Icons.Filled.Info,
-                    contentDescription = null,
-                    tint = DogeTextSecondary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Privacy: la conversione produce solo il dizionario mapping.bin e il " +
-                        "log conversion_log.json. Nessun bytecode o asset viene conservato " +
-                        "o esportato: tutto resta sul dispositivo.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DogeTextSecondary,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(28.dp))
-    }
-
-    if (showXrayWarning) {
-        DogeDialog(
-            title = "Attivare X-Ray?",
-            onDismiss = { showXrayWarning = false },
-            confirmText = "Ho capito, attiva",
-            onConfirm = {
-                showXrayWarning = false
-                xrayEnabled = true
-                prefs.edit().putBoolean(KEY_XRAY, true).apply()
-            },
-            dismissText = "Annulla",
-        ) {
-            Text(
-                "X-Ray mostra i blocchi attraverso le pareti. Usalo solo in " +
-                    "singleplayer o su server privati di tua proprietà: sui server " +
-                    "pubblici può comportare sanzioni o ban.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-            )
+            pb.directory(filesDir)
+            pb.redirectErrorStream(true)
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+            pb.start()
+            statusView.text = "Local AI server starting on 127.0.0.1:8080…"
+        } catch (e: Exception) {
+            statusView.text = "Unable to start the AI server: ${e.message}"
         }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Componenti locali
-// ---------------------------------------------------------------------------
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                color = DogeTextPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = DogeTextSecondary,
-                fontSize = 12.sp,
-            )
+    /** Copies an asset into private storage if the destination file does not exist. */
+    private fun extractAssetIfNeeded(path: String, assetName: String): File {
+        val dest = File(path)
+        if (dest.exists()) return dest
+        return try {
+            assets.open(assetName).use { input ->
+                dest.parentFile?.mkdirs()
+                input.copyTo(dest.outputStream())
+            }
+            dest
+        } catch (e: Exception) {
+            dest // resta inesistente, il chiamante gestisce l'errore
         }
-        Spacer(Modifier.width(10.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF1A1608),
-                checkedTrackColor = DogePrimary,
-                uncheckedThumbColor = DogeTextSecondary,
-                uncheckedTrackColor = DogeSurfaceHigh,
-                uncheckedBorderColor = DogeOutline,
-            ),
-        )
     }
-}
 
-@Composable
-private fun StatusRow(label: String, ok: Boolean, detail: String) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            if (ok) Icons.Filled.Check else Icons.Filled.Close,
-            contentDescription = null,
-            tint = if (ok) DogeSuccess else DogeDanger,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = DogeTextPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            detail,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (ok) DogeTextSecondary else DogeDanger,
-            fontSize = 12.sp,
-        )
+    override fun onDestroy() {
+        runCatching { converter.close() }
+        super.onDestroy()
     }
-}
-
-private fun describeAiState(state: String, endpoint: String): String = when (state) {
-    "ready" -> "AI attiva e pronta (server locale: $endpoint)."
-    "not_ready" -> "AI attiva ma server non raggiungibile ($endpoint): fallback senza AI."
-    "disarmed" -> "AI disattivata: conversione con sola libreria mapping.bin."
-    else -> "Stato AI: $state"
-}
-
-/** Cartelle dei pack già estratti in resourcepacks/. */
-private fun listPacks(ctx: Context): List<File> {
-    val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "resourcepacks")
-    return dir.listFiles { file -> file.isDirectory }
-        ?.sortedBy { it.name.lowercase() }
-        ?: emptyList()
-}
-
-/** Nome visualizzato del file scelto (fallback sul path dell'Uri). */
-private fun packDisplayName(ctx: Context, uri: android.net.Uri): String {
-    val fromQuery = runCatching {
-        ctx.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
-        }
-    }.getOrNull()
-    return fromQuery ?: uri.lastPathSegment?.substringAfterLast('/') ?: "pack.zip"
-}
-
-private fun toast(ctx: Context, message: String) {
-    Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
 }

@@ -66,11 +66,11 @@ impl FriendList {
                 continue;
             }
             let mut parts = line.split(' ');
-            let uuid = parts.next().ok_or_else(|| SocialError::Protocol("riga amici malformata".into()))?;
-            let nickname = parts.next().ok_or_else(|| SocialError::Protocol("riga amici malformata".into()))?;
-            let online = parts.next().ok_or_else(|| SocialError::Protocol("riga amici malformata".into()))?;
+            let uuid = parts.next().ok_or_else(|| SocialError::Protocol("malformed friends row".into()))?;
+            let nickname = parts.next().ok_or_else(|| SocialError::Protocol("malformed friends row".into()))?;
+            let online = parts.next().ok_or_else(|| SocialError::Protocol("malformed friends row".into()))?;
             if parts.next().is_some() || !valid_nickname(nickname) || uuid.len() != 36 {
-                return Err(SocialError::Protocol(format!("riga amici non valida: {line}")));
+                return Err(SocialError::Protocol(format!("invalid friends row: {line}")));
             }
             list.friends.insert(nickname.to_string(), Friend {
                 nickname: nickname.to_string(),

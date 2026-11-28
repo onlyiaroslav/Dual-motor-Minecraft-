@@ -31,7 +31,7 @@ use std::ffi::c_void;
 
 use jni::objects::{GlobalRef, JByteArray, JByteBuffer, JClass, JObject, JString, JValue};
 use jni::signature::{Primitive, ReturnType};
-use jni::sys::{jint, jlong, JNI_VERSION_1_6};
+use jni::sys::{jint, jlong, JNI_VERSION_1_8};
 use jni::{JNIEnv, JavaVM};
 
 use bridge_u8::{BridgeError, LookupTable, NativeAction, NativeExecutor};
@@ -113,7 +113,7 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativeAttach<'lo
             throw(
                 &mut env,
                 "java/lang/IllegalArgumentException",
-                "ring: richiesto un ByteBuffer DIRECT (allocateDirect o mmap)",
+                "ring: a DIRECT ByteBuffer is required (allocateDirect or mmap)",
             );
             return 0;
         }
@@ -183,7 +183,7 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativePoll(
     handle: jlong,
 ) -> jint {
     if handle == 0 {
-        throw(&mut env, "java/lang/IllegalStateException", "handle nullo");
+        throw(&mut env, "java/lang/IllegalStateException", "null handle");
         return -1;
     }
     // SAFETY: handle creato da nativeAttach, non ancora detachato (contratto Java).
@@ -214,7 +214,7 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativeDispatch<'
     len: jint,
 ) -> jint {
     if handle == 0 {
-        throw(&mut env, "java/lang/IllegalStateException", "handle nullo");
+        throw(&mut env, "java/lang/IllegalStateException", "null handle");
         return -1;
     }
     let arr_len = match env.get_array_length(&data) {
@@ -225,7 +225,7 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativeDispatch<'
         }
     };
     if len < 0 || len > arr_len {
-        throw(&mut env, "java/lang/IllegalArgumentException", "len fuori range");
+        throw(&mut env, "java/lang/IllegalArgumentException", "len out of range");
         return -1;
     }
     let mut buf = vec![0i8; len as usize];
@@ -267,5 +267,5 @@ pub extern "system" fn Java_dev_starling_bridge_NativeTransport_nativeDetach(
 /// Versione JNI richiesta dalla libreria.
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(_vm: JavaVM, _reserved: *mut c_void) -> jint {
-    JNI_VERSION_1_6
+    JNI_VERSION_1_8
 }

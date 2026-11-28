@@ -58,7 +58,7 @@ fn with_handle<R>(
     let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
     match reg.get_mut(&handle) {
         Some(h) => f(h),
-        None => Err(SocialError::Server("handle non valido o già liberato".into())),
+        None => Err(SocialError::Server("invalid or already released handle".into())),
     }
 }
 

@@ -1,46 +1,46 @@
-//! Errori del bridge a 8 bit.
+//! Errors of the 8-bit bridge.
 
 use std::fmt;
 use std::io;
 
-/// Errori prodotti dal crate `bridge-u8`.
+/// Errors produced by the `bridge-u8` crate.
 #[derive(Debug)]
 pub enum BridgeError {
-    /// Errore di I/O durante il caricamento/salvataggio del mapping.
+    /// I/O error while loading/saving the mapping.
     Io(io::Error),
-    /// Il file non inizia con il magic `BU8M`.
+    /// The file does not start with the `BU8M` magic.
     InvalidMagic([u8; 4]),
-    /// Versione del formato non supportata da questo crate.
+    /// Unsupported format version for this crate.
     UnsupportedVersion(u16),
-    /// File terminato prima del previsto (header o record incompleto).
+    /// File ended before expected (incomplete header or record).
     TruncatedMapping,
-    /// Il file dichiara più entry del massimo possibile (65536).
+    /// The file declares more entries than the maximum possible (65536).
     TooManyEntries(u32),
-    /// Lo stesso ID di wire è mappato due volte.
+    /// The same wire ID is mapped twice.
     DuplicateMapping(u16),
-    /// Il file contiene un ID azione che non corrisponde a nessuna `NativeAction`.
+    /// The file contains an action ID that does not match any `NativeAction`.
     UnknownActionId(u16),
-    /// ID di wire ricevuto dalla JVM ma assente nella LUT.
+    /// Wire ID received from the JVM but absent from the LUT.
     UnmappedWireId(u16),
-    /// L'esecutore nativo ha rifiutato/ fallito l'azione.
+    /// The native executor rejected/failed the action.
     Executor(String),
-    /// Buffer condiviso (ring) non valido: magic, versione, allineamento, capacità.
+    /// Invalid shared buffer (ring): magic, version, alignment, capacity.
     InvalidRing(String),
 }
 
 impl fmt::Display for BridgeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "errore I/O: {e}"),
-            Self::InvalidMagic(m) => write!(f, "magic non valido: {m:?} (atteso b\"BU8M\")"),
-            Self::UnsupportedVersion(v) => write!(f, "versione mapping non supportata: {v}"),
-            Self::TruncatedMapping => write!(f, "file mapping troncato"),
-            Self::TooManyEntries(n) => write!(f, "troppe entry nel mapping: {n} (max 65536)"),
-            Self::DuplicateMapping(id) => write!(f, "ID di wire duplicato: 0x{id:04X}"),
-            Self::UnknownActionId(id) => write!(f, "ID azione sconosciuto: {id}"),
-            Self::UnmappedWireId(id) => write!(f, "ID di wire non mappato: 0x{id:04X}"),
-            Self::Executor(msg) => write!(f, "errore esecutore nativo: {msg}"),
-            Self::InvalidRing(msg) => write!(f, "ring buffer non valido: {msg}"),
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::InvalidMagic(m) => write!(f, "invalid magic: {m:?} (expected b\"BU8M\")"),
+            Self::UnsupportedVersion(v) => write!(f, "unsupported mapping version: {v}"),
+            Self::TruncatedMapping => write!(f, "mapping file truncated"),
+            Self::TooManyEntries(n) => write!(f, "too many entries in mapping: {n} (max 65536)"),
+            Self::DuplicateMapping(id) => write!(f, "duplicate wire ID: 0x{id:04X}"),
+            Self::UnknownActionId(id) => write!(f, "unknown action ID: {id}"),
+            Self::UnmappedWireId(id) => write!(f, "unmapped wire ID: 0x{id:04X}"),
+            Self::Executor(msg) => write!(f, "native executor error: {msg}"),
+            Self::InvalidRing(msg) => write!(f, "invalid ring buffer: {msg}"),
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Simulazione del game loop lato Rust (senza JVM): un thread produttore
 //! mock scrive nel ring a 20 TPS, il "motore" consuma a 60 FPS.
 //!
-//! Verifica: zero perdite, poll sotto il budget di 5 ms, pacing corretto.
+//! Checks: zero losses, poll under the 5 ms budget, pacing correct.
 //! Esegui: `cargo run --release -p bridge-jni --example game_loop`
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -104,9 +104,9 @@ fn main() {
          max_poll={max_poll:?} dropped={}",
         consumer.dropped_bytes()
     );
-    assert_eq!(received, produced, "perdite di pacchetti!");
+    assert_eq!(received, produced, "packet losses!");
     assert_eq!(consumer.dropped_bytes(), 0, "overflow del ring!");
     assert!(max_poll < Duration::from_millis(5), "poll oltre budget!");
     assert!(wall >= Duration::from_millis(16_667 * FRAMES as u64 / 1000));
-    println!("game loop Rust: PASS (zero perdite, zero scarti, pacing 60 FPS)");
+    println!("game loop Rust: PASS (zero losses, zero drops, pacing 60 FPS)");
 }

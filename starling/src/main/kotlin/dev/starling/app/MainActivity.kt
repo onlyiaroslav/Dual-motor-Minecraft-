@@ -3,56 +3,33 @@ package dev.starling.app
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.concurrent.thread
 
 /**
- * Activity principale del launcher Doge Client.
+ * Main activity of the Doge Client launcher.
  *
- * Il pulsante "Play" apre [GameActivity]: SurfaceView + renderer voxel Rust
- * (wgpu/Vulkan) con game loop a 60 FPS e tick 20 TPS. La JVM headless embedded
- * viene avviata là ([nativeStartGame], stessa logica di BridgeService, condivisa
- * via startJvmEmbedded in starling_jvm_host.cpp); senza JRE installata il gioco
- * 3D gira lo stesso e il poll del bridge ritorna 0.
+ * The "Play" button opens [GameActivity]: SurfaceView + voxel Rust renderer
+ * (wgpu/Vulkan) with a 60 FPS game loop and a 20 TPS tick. The embedded
+ * headless JVM is started there ([nativeStartGame], same logic as
+ * BridgeService, shared via startJvmEmbedded in starling_jvm_host.cpp); if no
+ * JRE is installed the 3D game still runs and the bridge poll returns 0.
  *
- * All'avvio, se abilitato nelle impostazioni, lancia il server AI locale.
+ * At startup, if the user enabled auto-start in Settings, it automatically
+ * launches the local AI server (llama-server) on 127.0.0.1:8080 so that mod
+ * conversion with the local AI works without any manual configuration.
  */
 class MainActivity : ComponentActivity() {
 
     companion object {
-        /** True se le librerie native sono state caricate senza errori. */
-        var nativeLibsLoaded: Boolean = false
-            private set
-
-        /** Dettaglio del fallimento (quale libreria e messaggio del linker). */
-        var nativeLoadError: String? = null
-            private set
+        private const val DEFAULT_SERVER_EXE = "llama-server"
+        private const val DEFAULT_MODEL = "smollm2-360m-instruct-q4_k_m.gguf"
+        private const val AI_ASSET_DIR = "ai"
 
         init {
-            // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
-            // Se una libreria manca o fallisce non crashiamo: la UI parte e il
-            // pulsante Gioca mostra QUALE libreria fallisce e perché.
-            val errors = mutableListOf<String>()
-            for (lib in listOf("bridge_jni", "starling_jvm_host")) {
-                try {
-                    System.loadLibrary(lib)
-                } catch (t: Throwable) {
-                    errors += "$lib → ${t.message ?: t.javaClass.simpleName}"
-                }
-            }
-            nativeLibsLoaded = errors.isEmpty()
-            nativeLoadError = if (errors.isEmpty()) null else errors.joinToString("\n")
+            // Load the native libraries (order: bridge Rust first, then host C++).
+            System.loadLibrary("bridge_jni")
+            System.loadLibrary("starling_jvm_host")
         }
 
         /**
@@ -61,9 +38,9 @@ class MainActivity : ComponentActivity() {
          * Chiamata dal render thread di GameActivity. Restituisce true se
          * l'avvio riesce.
          *
-         * @JvmStatic: il simbolo JNI è Java_dev_starling_app_MainActivity_
-         * nativeStartGame (come esportato da starling_jvm_host.cpp), non
-         * sulla classe Companion.
+         * @JvmStatic: the JNI symbol is Java_dev_starling_app_MainActivity_
+         * nativeStartGame (as exported by starling_jvm_host.cpp), not
+         * on the Companion class.
          */
         @JvmStatic
         external fun nativeStartGame(
@@ -78,34 +55,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-        )
 
-        val ctx = applicationContext
+        // --- Automatic local AI server startup (zero-config) ---
         val aiPrefs = getSharedPreferences("starling_settings", MODE_PRIVATE)
-
-        // --- Avvio automatico server AI locale (zero-config) ---------------
-        if (aiPrefs.getBoolean("ai_auto_start_server", false)) {
-            val exe = aiPrefs.getString("ai_server_exe_path", AiLocalServer.DEFAULT_SERVER_EXE)
-                ?: AiLocalServer.DEFAULT_SERVER_EXE
-            val model = aiPrefs.getString("ai_model_path", AiLocalServer.DEFAULT_MODEL)
-                ?: AiLocalServer.DEFAULT_MODEL
-            thread(name = "doge-ai-server") {
-                AiLocalServer.startIfNeeded(ctx, exe, model)
-            }
+        val aiAutoStart = aiPrefs.getBoolean("ai_auto_start_server", false)
+        if (aiAutoStart) {
+            val exe = aiPrefs.getString("ai_server_exe_path", DEFAULT_SERVER_EXE) ?: DEFAULT_SERVER_EXE
+            val model = aiPrefs.getString("ai_model_path", DEFAULT_MODEL) ?: DEFAULT_MODEL
+            startEmbeddedAiServer(exe, model)
         }
 
-        // --- Percorsi (identici a BridgeService: Scoped Storage OK) --------
-        val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+        val ctx = applicationContext
+
+        // Paths identical to the ones used by BridgeService (Scoped Storage OK).
+        val base = ctx.getExternalFilesDir(null)!!
         val mods = File(base, "mods").apply { mkdirs() }
         val lut = File(base, "lut").apply { mkdirs() }
         val bridgeDir = File(ctx.filesDir, "bridge").apply { mkdirs() }
 
-        // Classi del bridge per la JVM embedded (jar, NON dex).
-        // Se l'asset non è presente, non blocchiamo l'avvio della UI: il
-        // pulsante Play resterà senza effetto finché il jar non viene aggiunto.
+        // The bridge classes for the embedded JVM (jar, NOT dex).
+        // If the asset is missing, we do not block the UI startup: the Play
+        // button will have no effect until the jar is added.
         val bridgeJar = File(bridgeDir, "bridge-u8.jar")
         if (!bridgeJar.exists()) {
             runCatching {
@@ -115,7 +85,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // mapping.bin: default offline, se assente si usa quello impacchettato.
+        // mapping.bin: default offline, if absent the packaged one is used.
         val mapping = File(lut, "mapping.bin")
         if (!mapping.exists()) {
             runCatching {
@@ -127,10 +97,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DogeTheme {
-                var account by remember { mutableStateOf(AccountStore.load(ctx)) }
-                var install by remember { mutableStateOf(InstallState()) }
-                val scope = rememberCoroutineScope()
-
                 MainScreen(
                     onStartGame = {
                         // Play → GameActivity: SurfaceView + renderer Rust.
@@ -139,6 +105,53 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Embedded local AI server: automatic startup (zero-config)
+    // -----------------------------------------------------------------------
+
+    /** Starts the local AI server as a child process if it is not already listening.
+     *  Looks for the executable and the model in the assets (ai/*) if they are not
+     *  yet present in the app's private storage. */
+    private fun startEmbeddedAiServer(exePath: String, modelPath: String) {
+        val exeFile = extractAssetIfNeeded(exePath, "$AI_ASSET_DIR/${exePath.split("/").last()}")
+        val modelFile = extractAssetIfNeeded(modelPath, "$AI_ASSET_DIR/${modelPath.split("/").last()}")
+
+        if (!exeFile.exists() || !modelFile.exists()) {
+            return // fallback: the AI stays disabled, no crash
+        }
+
+        try {
+            val pb = ProcessBuilder(
+                exeFile.absolutePath,
+                "-m", modelFile.absolutePath,
+                "--host", "127.0.0.1",
+                "--port", "8080",
+                "-c", "512"
+            )
+            pb.directory(filesDir)
+            pb.redirectErrorStream(true)
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+            pb.start()
+        } catch (e: Exception) {
+            // Ignored: fallback handled by local-ai (server absent => AI disabled)
+        }
+    }
+
+    /** Copies an asset into private storage if the destination file does not exist. */
+    private fun extractAssetIfNeeded(path: String, assetName: String): File {
+        val dest = File(path)
+        if (dest.exists()) return dest
+        return try {
+            assets.open(assetName).use { input ->
+                dest.parentFile?.mkdirs()
+                input.copyTo(dest.outputStream())
+            }
+            dest
+        } catch (e: Exception) {
+            dest // stays non-existent, the caller handles the error
         }
     }
 }

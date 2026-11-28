@@ -64,7 +64,7 @@ fn with_handle<R>(
         Some(h) => f(h),
         None => Err(ConverterError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "handle non valido o già liberato",
+            "invalid or already released handle",
         ))),
     }
 }

@@ -115,7 +115,7 @@ rimuoverlo.
 
 ```bash
 cargo ndk -t arm64-v8a --platform 33 \
-  -o starling/app/src/main/jniLibs \
+  -o starling/src/main/jniLibs \
   build --release --package starling-social --features jni
 ```
 

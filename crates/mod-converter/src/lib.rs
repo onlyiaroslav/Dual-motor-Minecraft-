@@ -50,9 +50,9 @@ pub enum ConverterError {
 impl fmt::Display for ConverterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "errore I/O convertitore: {e}"),
-            Self::Analyzer(e) => write!(f, "errore analizzatore: {e}"),
-            Self::Mapping(e) => write!(f, "errore mapping: {e}"),
+            Self::Io(e) => write!(f, "converter I/O error: {e}"),
+            Self::Analyzer(e) => write!(f, "analyzer error: {e}"),
+            Self::Mapping(e) => write!(f, "mapping error: {e}"),
         }
     }
 }
@@ -214,7 +214,7 @@ pub fn convert_signatures(
                     wire_id,
                     action: None,
                     source: DecisionSource::Disabled,
-                    reason: "AI disattivata".into(),
+                    reason: "AI disabled".into(),
                 });
                 discarded += 1;
             }
@@ -440,9 +440,9 @@ mod tests {
         assert_eq!(report.discarded, 1);
         assert!(report.entries.is_empty());
         assert_eq!(report.log[0].source, DecisionSource::Disabled);
-        assert_eq!(report.log[0].reason, "AI disattivata");
+        assert_eq!(report.log[0].reason, "AI disabled");
         let json = conversion_log_json(&report);
-        assert!(json.contains("AI disattivata"));
+        assert!(json.contains("AI disabled"));
     }
 
     #[test]

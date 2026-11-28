@@ -1,7 +1,7 @@
 package dev.starling.packs
 
 /**
- * Azione restituita dal gate di controllo file base.
+ * Action returned by the base-files gate.
  */
 sealed class BaseAction {
     object Download : BaseAction()
@@ -9,7 +9,7 @@ sealed class BaseAction {
 }
 
 /**
- * Gate anti-loop per pack esterni (stub per compilazione).
+ * Anti-loop gate for external packs (compilation stub).
  */
 class PackGate {
     fun onExternalPackValid() { /* no-op stub */ }

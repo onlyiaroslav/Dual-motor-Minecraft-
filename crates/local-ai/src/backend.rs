@@ -60,7 +60,7 @@ impl fmt::Display for AiBackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ModelNotAvailable => write!(f, "server AI locale non disponibile"),
-            Self::Inference => write!(f, "errore inferenza AI locale"),
+            Self::Inference => write!(f, "local AI inference error"),
             Self::Timeout => write!(f, "timeout AI locale"),
         }
     }
@@ -162,7 +162,7 @@ pub fn build_request_body(model: &str, prompt: &str) -> String {
 /// Estrae `choices[0].message.content` dalla risposta OpenAI-compatible.
 pub fn parse_openai_content(body: &str) -> Result<String, TransportError> {
     let value: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| TransportError::Parse(format!("JSON non valido: {e}")))?;
+        .map_err(|e| TransportError::Parse(format!("invalid JSON: {e}")))?;
     value
         .get("choices")
         .and_then(|choices| choices.get(0))
@@ -171,7 +171,7 @@ pub fn parse_openai_content(body: &str) -> Result<String, TransportError> {
         .and_then(|content| content.as_str())
         .map(str::to_string)
         .ok_or_else(|| {
-            TransportError::Parse("choices[0].message.content assente".to_string())
+            TransportError::Parse("choices[0].message.content missing".to_string())
         })
 }
 
@@ -193,7 +193,7 @@ pub enum TransportError {
 impl fmt::Display for TransportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Network(e) => write!(f, "errore di rete: {e}"),
+            Self::Network(e) => write!(f, "network error: {e}"),
             Self::Timeout => write!(f, "timeout della richiesta HTTP"),
             Self::Http(code) => write!(f, "risposta HTTP {code}"),
             Self::Parse(e) => write!(f, "risposta non valida: {e}"),
@@ -347,13 +347,13 @@ impl AiBackend for HttpAiBackend {
             Ok(response) => match parse_openai_content(&response) {
                 Ok(content) => Ok(parse_action_response(&content)),
                 Err(error) => {
-                    eprintln!("[local-ai] risposta del server non valida: {error}");
+                    eprintln!("[local-ai] invalid server response: {error}");
                     Ok(None)
                 }
             },
             Err(error) => {
                 // Server assente/timeout/HTTP errore: fallback come toggle OFF.
-                eprintln!("[local-ai] server locale non disponibile: {error}");
+                eprintln!("[local-ai] local server unavailable: {error}");
                 Ok(None)
             }
         }
@@ -724,7 +724,7 @@ mod tests {
     fn translate_errore_rete_fallback_senza_panic() {
         let transport = Arc::new(MockTransport::err(
             false,
-            TransportError::Network("connessione rifiutata".into()),
+            TransportError::Network("connection refused".into()),
         ));
         let backend = HttpAiBackend::with_transport(DEFAULT_ENDPOINT, transport.clone());
         assert_eq!(

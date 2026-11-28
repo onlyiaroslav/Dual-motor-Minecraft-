@@ -40,7 +40,7 @@ impl Default for RenderConfig {
 }
 
 /// Avviso obbligatorio all'attivazione dell'X-Ray.
-pub const XRAY_WARNING: &str = "Solo per Singleplayer/Server privati. L'uso su server pubblici può causare il ban.";
+pub const XRAY_WARNING: &str = "Singleplayer/private server only. Using it on public servers can result in a ban.";
 
 impl RenderConfig {
     /// Toggle X-Ray. Ritorna l'avviso da loggare quando viene ATTIVATO

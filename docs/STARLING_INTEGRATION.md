@@ -19,9 +19,9 @@ cargo install cargo-ndk --locked
 
 # Build: bridge-jni produce libbridge_jni.so direttamente in jniLibs
 cargo ndk -t arm64-v8a --platform 33 \
-    -o starling/app/src/main/jniLibs \
+    -o starling/src/main/jniLibs \
     build --release --package bridge-jni
-# → starling/app/src/main/jniLibs/arm64-v8a/libbridge_jni.so
+# → starling/src/main/jniLibs/arm64-v8a/libbridge_jni.so
 ```
 
 **Nota importante:** `bridge-u8` è una **rlib** (libreria statica Rust): viene

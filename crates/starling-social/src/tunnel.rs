@@ -43,9 +43,9 @@ impl std::fmt::Display for TunnelError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unsupported(m) => write!(f, "tunnel non disponibile: {m}"),
-            Self::InvalidPeer(p) => write!(f, "peer non valido: {p}"),
+            Self::InvalidPeer(p) => write!(f, "invalid peer: {p}"),
             Self::Timeout => write!(f, "timeout di connessione"),
-            Self::Io(e) => write!(f, "errore di rete: {e}"),
+            Self::Io(e) => write!(f, "network error: {e}"),
         }
     }
 }
@@ -147,7 +147,7 @@ impl P2pTunnel for FutureP2pTunnel {
 
     fn connect(&self, _peer: &str, _timeout: Duration) -> Result<TcpStream, TunnelError> {
         Err(TunnelError::Unsupported(
-            "tunnel P2P (iroh/libp2p) non ancora implementato: usare la modalità LAN",
+            "P2P tunnel (iroh/libp2p) not yet implemented: use the LAN mode",
         ))
     }
 }

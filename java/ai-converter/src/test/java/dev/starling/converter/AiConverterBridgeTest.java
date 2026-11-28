@@ -152,7 +152,7 @@ public final class AiConverterBridgeTest {
                     "mapping.bin con magic BU8M");
 
             String json = new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
-            check(json.contains("AI disattivata"), "log contiene 'AI disattivata'");
+            check(json.contains("AI disabled"), "log contains 'AI disabled'");
             check(json.contains("com.example.Test.a()V"), "log contiene la firma (solo firma)");
             check(!json.contains("CAFEBABE"), "zero codice copiato: nessun bytecode nel log");
         } finally {

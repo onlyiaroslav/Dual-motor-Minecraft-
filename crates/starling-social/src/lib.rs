@@ -51,26 +51,26 @@ use std::fmt;
 /// Errori del layer social.
 #[derive(Debug)]
 pub enum SocialError {
-    /// Errore di I/O (file amici, rete).
+    /// I/O error (friends file, network).
     Io(std::io::Error),
-    /// Protocollo malformato.
+    /// Malformed protocol.
     Protocol(String),
     /// Nickname non valido (3–16 caratteri [A-Za-z0-9_]).
     InvalidNickname(String),
     /// Nickname già presente nella lista.
     DuplicateFriend(String),
-    /// Server auth non avviato o già fermo.
+    /// Auth server not started or already stopped.
     Server(String),
 }
 
 impl fmt::Display for SocialError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "errore I/O: {e}"),
-            Self::Protocol(m) => write!(f, "errore protocollo: {m}"),
-            Self::InvalidNickname(n) => write!(f, "nickname non valido: {n}"),
-            Self::DuplicateFriend(n) => write!(f, "amico già presente: {n}"),
-            Self::Server(m) => write!(f, "errore server auth: {m}"),
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Protocol(m) => write!(f, "protocol error: {m}"),
+            Self::InvalidNickname(n) => write!(f, "invalid nickname: {n}"),
+            Self::DuplicateFriend(n) => write!(f, "friend already present: {n}"),
+            Self::Server(m) => write!(f, "auth server error: {m}"),
         }
     }
 }

@@ -23,7 +23,3 @@ local.properties
 # OS
 .DS_Store
 Thumbs.db
-
-# Python (script di verifica)
-__pycache__/
-*.pyc

@@ -101,7 +101,7 @@ pub struct LocalAiError {
 
 impl fmt::Display for LocalAiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "errore AI locale: {}", self.reason)
+        write!(f, "local AI error: {}", self.reason)
     }
 }
 
@@ -134,6 +134,7 @@ impl LocalAiEngine {
         config: LocalAiConfig,
         embedded: EmbeddedServerConfig,
     ) -> Self {
+        let endpoint = config.endpoint.clone();
         Self {
             config,
             state: Arc::new(Mutex::new(EngineState::NotReady)),

@@ -57,7 +57,7 @@ public final class AiConverterBridge implements AutoCloseable {
         }
         this.handle = nativeCreate(endpoint, libraryPath);
         if (this.handle == 0) {
-            throw new IllegalStateException("impossibile creare il convertitore");
+            throw new IllegalStateException("Unable to create the converter");
         }
     }
 
@@ -109,7 +109,7 @@ public final class AiConverterBridge implements AutoCloseable {
 
     private void checkOpen() {
         if (handle == 0) {
-            throw new IllegalStateException("AiConverterBridge già chiuso");
+            throw new IllegalStateException("AiConverterBridge already closed");
         }
     }
 

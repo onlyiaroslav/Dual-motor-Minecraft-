@@ -17,39 +17,39 @@ import android.widget.Toast
 import java.io.File
 
 /**
- * Activity di gioco: SurfaceView + renderer voxel Rust (libstarling_render).
+ * Game activity: SurfaceView + voxel Rust renderer (libstarling_render).
  *
- * Al tap su Play il launcher apre questa Activity. Un render thread dedicato:
- *  1. avvia la JVM headless embedded ([MainActivity.nativeStartGame], stessi
- *     percorsi di BridgeService). Se la JRE non è installata l'avvio fallisce
- *     e il gioco 3D gira lo stesso: il poll del bridge ritorna 0;
- *  2. crea il motore native sulla ANativeWindow della SurfaceView
- *     ([nativeCreate]: wgpu/Vulkan, mondo demo, mesh greedy + X-Ray di
+ * Tapping Play opens this Activity. A dedicated render thread:
+ *  1. starts the embedded headless JVM ([MainActivity.nativeStartGame], same
+ *     paths as BridgeService). If the JRE is not installed the startup fails and
+ *     the 3D game still runs: the bridge poll returns 0;
+ *  2. creates the native engine on the SurfaceView's ANativeWindow
+ *     ([nativeCreate]: wgpu/Vulkan, demo world, greedy mesh + X-Ray from
  *     starling-features);
- *  3. chiama [nativeFrame] una volta per frame: poll del bridge a 8 bit
- *     (`nativePoll` via host C), tick 20 TPS, movimento/collisioni, draw,
- *     pacing 60 FPS. Niente JNI per pacchetto, una sola chiamata per frame.
+ *  3. calls [nativeFrame] once per frame: bridge poll at 8-bit
+ *     (`nativePoll` via host C), tick 20 TPS, movement/collisions, draw,
+ *     pacing 60 FPS. No JNI per packet, one call per frame.
  *
- * Tutte le chiamate native sono serializzate su [lock]: il render thread fa
- * frame, la UI thread fa touch/resize/jump/X-Ray. `surfaceDestroyed` ferma il
- * loop, attende il thread e rilascia la ANativeWindow (mai use-after-free).
+ * All native calls are serialized on [lock]: the render thread does frames,
+ * the UI thread does touch/resize/jump/X-Ray. `surfaceDestroyed` stops the
+ * loop, waits for the thread and releases the ANativeWindow (never use-after-free).
  *
- * Controlli: stick a sinistra (movimento), drag a destra (camera), tap breve
- * sul mondo = rompi blocco, hold = piazza; pulsanti X-Ray / Salta / Esci.
+ * Controls: stick to the left (movement), drag to the right (camera), short tap
+ * on the world = break block, hold = place; X-Ray / Jump / Exit buttons.
  */
 class GameActivity : Activity() {
 
     companion object {
         init {
-            // Ordine richiesto: bridge Rust → host C++ → renderer Rust.
-            // Il renderer risolve i simboli C dell'host (starling_jvm_poll_frame,
-            // starling_jvm_set_action_callback) dalla libreria già caricata.
+            // Required order: bridge Rust → host C++ → renderer Rust.
+            // The renderer resolves the C symbols of the host (starling_jvm_poll_frame,
+            // starling_jvm_set_action_callback) from the already loaded library.
             System.loadLibrary("bridge_jni")
             System.loadLibrary("starling_jvm_host")
             System.loadLibrary("starling_render")
         }
 
-        /** Crea motore + renderer sulla Surface della SurfaceView (0 = errore). */
+        /** Creates the engine + renderer on the SurfaceView surface (0 = error). */
         @JvmStatic
         external fun nativeCreate(surface: Surface, width: Int, height: Int): Long
 
@@ -63,11 +63,11 @@ class GameActivity : Activity() {
         @JvmStatic
         external fun nativeJump(handle: Long)
 
-        /** Ritorna l'avviso obbligatorio alla transizione X-Ray off→on. */
+        /** Returns the mandatory warning for the X-Ray off→on transition. */
         @JvmStatic
         external fun nativeSetXray(handle: Long, on: Boolean): String?
 
-        /** Un frame (poll bridge + update + draw + pacing). false = superficie persa. */
+        /** One frame (bridge poll + update + draw + pacing). false = surface lost. */
         @JvmStatic
         external fun nativeFrame(handle: Long): Boolean
 
@@ -78,7 +78,7 @@ class GameActivity : Activity() {
     /** Serializza tutte le chiamate native (render thread + UI thread). */
     private val lock = Any()
     private var handle = 0L
-    /** Sessione di render corrente (sotto lock): invalida i thread superstiti. */
+    /** Current render session (under lock): invalidates the stale threads. */
     private var session = 0
     private var renderThread: Thread? = null
     @Volatile private var running = false
@@ -106,7 +106,7 @@ class GameActivity : Activity() {
             )
         )
 
-        // Overlay minimale: X-Ray (con avviso), salto, uscita.
+        // Minimal overlay: X-Ray (with warning), jump, exit.
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         buttons.addView(Button(this).apply {
             text = getString(R.string.game_xray)
@@ -147,8 +147,8 @@ class GameActivity : Activity() {
     }
 
     override fun onDestroy() {
-        // Rete di sicurezza: se la surface è già andata via, stopRender ha già
-        // rilasciato; qui copriamo il caso di finish() senza surfaceDestroyed.
+        // Safety net: if the surface already went away, stopRender already
+        // released; here we cover the finish() without surfaceDestroyed case.
         stopRender()
         super.onDestroy()
     }
@@ -164,14 +164,14 @@ class GameActivity : Activity() {
         val w = surfaceView.width
         val h = surfaceView.height
         renderThread = Thread({
-            // JVM headless per le mod (best-effort: senza JRE il gioco gira).
+            // Headless JVM for mods (best-effort: without JRE the game runs).
             startJvmEmbedded()
 
             val created = runCatching {
                 synchronized(lock) { nativeCreate(surface, w, h) }
             }.getOrDefault(0L)
             if (created == 0L) {
-                // Errore GPU: segnala solo se questa sessione è ancora corrente.
+                // Error: GPU — report only if this session is still current.
                 if (synchronized(lock) { session == mySession }) {
                     running = false
                     runOnUiThread {
@@ -181,8 +181,8 @@ class GameActivity : Activity() {
                 }
                 return@Thread
             }
-            // Adotta l'handle solo se questa sessione è ancora quella corrente
-            // (surfaceDestroyed può essere arrivato durante l'avvio JVM).
+            // Adopt the handle only if this session is still the current one
+            // (surfaceDestroyed may arrive during JVM startup).
             val adopted = synchronized(lock) {
                 if (session == mySession) {
                     handle = created
@@ -212,7 +212,7 @@ class GameActivity : Activity() {
                     }
                 }
                 if (running) {
-                    // Superficie persa / errore GPU: esce pulito.
+                    // Surface lost / GPU error: exit cleanly.
                     runOnUiThread {
                         Toast.makeText(this, R.string.game_render_error, Toast.LENGTH_LONG).show()
                         finish()
@@ -224,11 +224,11 @@ class GameActivity : Activity() {
 
     private fun stopRender() {
         running = false
-        // Invalida la sessione: un thread ancora in avvio JVM non adotterà
-        // mai il suo handle (lo rilascia da solo), né toccherà quello nuovo.
+        // Invalidate the session: a thread still starting up will not
+        // adopt it (it releases it on its own), nor touch the new one.
         synchronized(lock) { session++ }
-        // Il loop controlla `running` a ogni frame (≤16 ms). Timeout 2 s per
-        // non rischiare ANR se il thread è ancora nell'avvio JVM.
+        // The loop checks `running` at each frame (≤16 ms). Timeout 2 s to
+        // avoid an ANR if the thread is still starting the JVM.
         renderThread?.join(2000)
         renderThread = null
         synchronized(lock) {
@@ -269,7 +269,7 @@ class GameActivity : Activity() {
         val warning = synchronized(lock) {
             if (handle != 0L) nativeSetXray(handle, xrayOn) else null
         }
-        // Avviso obbligatorio all'attivazione (solo singleplayer/server privati).
+        // Mandatory warning on activation (singleplayer/private servers only).
         if (warning != null) {
             Toast.makeText(this, warning, Toast.LENGTH_LONG).show()
         }

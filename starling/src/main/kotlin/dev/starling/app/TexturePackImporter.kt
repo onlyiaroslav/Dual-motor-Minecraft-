@@ -5,27 +5,25 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import dev.starling.packs.BaseAction
 import dev.starling.packs.PackGate
 import dev.starling.packs.PackImporter
 import dev.starling.packs.Result as PackImportResult
 import java.io.File
 
 /**
- * Importatore texture pack per Starling (layer Android/ART).
+ * Texture pack importer for Starling (Android/ART layer).
  *
- * Selezione file con ACTION_OPEN_DOCUMENT (ActivityResultContracts.OpenDocument):
- * l'utente sceglie uno .zip dal document picker di sistema; il core Java
+ * The user picks a .zip from the system document picker; the Java core
  * [PackImporter] lo estrae nella sandbox privata (getExternalFilesDir),
  * genera/corregge pack.mcmeta e il launcher lo riconosce subito.
  *
- * FIX LOOP INFINITO: un pack esterno non valido viene scartato con un
- * messaggio ([PackGate.onExternalPackInvalid] → BaseAction.NONE). Il download
- * dei file base parte SOLO da [maybeDownloadBaseFiles], cioè dalla mancanza
- * reale dei file base, mai dal fallimento di un pack esterno.
+ * FIX INFINITE LOOP: an invalid external pack is rejected with a message
+ * ([PackGate.onExternalPackInvalid] → BaseAction.NONE). The download of base
+ * files starts ONLY from [maybeDownloadBaseFiles], that is from the real
+ * missing-base-files state, never from an external pack failure.
  *
- * Istanziare in onCreate (registerForActivityResult va chiamato prima di STARTED).
- * Il core Java va impacchettato nell'APK (dex, gira su ART).
+ * Instantiate in onCreate (registerForActivityResult must be called before STARTED).
+ * The Java core must be packaged in the APK (dex, runs on ART).
  */
 class TexturePackImporter(private val activity: ComponentActivity) {
 
@@ -37,28 +35,24 @@ class TexturePackImporter(private val activity: ComponentActivity) {
     private val core = PackImporter()
     private val gate = PackGate()
     private val packsDir =
-        File(activity.getExternalFilesDir(null) ?: activity.filesDir, "resourcepacks")
-            .apply { mkdirs() }
+        File(activity.getExternalFilesDir(null), "resourcepacks").apply { mkdirs() }
 
     private val picker =
         activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
                 val result = import(uri)
                 if (result.ok) {
-                    val dir = result.packDir
-                    if (dir != null) {
-                        toast("Pack importato: ${dir.fileName}")
-                        // Notifica il launcher/resource manager per il reload immediato.
-                        onPackImported(dir.toFile())
-                    }
+                    toast("Pack imported: ${result.packDir.fileName}")
+                    // Notify the launcher/resource manager for the immediate reload.
+                    onPackImported(result.packDir.toFile())
                 } else {
-                    // Pack scartato: messaggio d'errore, NESSUN restart dei download.
-                    toast("Pack scartato: ${result.error}")
+                    // Pack rejected: error message, NO download restart.
+                    toast("Pack rejected: ${result.error}")
                 }
             }
         }
 
-    /** Apre il document picker di sistema (ACTION_OPEN_DOCUMENT) sugli zip. */
+    /** Opens the system document picker (ACTION_OPEN_DOCUMENT) for zips. */
     fun launchPicker() {
         picker.launch(arrayOf("application/zip"))
     }
@@ -69,26 +63,26 @@ class TexturePackImporter(private val activity: ComponentActivity) {
         val result = try {
             activity.contentResolver.openInputStream(uri)?.use { input ->
                 core.importZip(input, packsDir.toPath(), name, PACK_FORMAT)
-            } ?: PackImportResult.fail("impossibile aprire il file selezionato")
+            } ?: PackImportResult.fail("Unable to open the selected file")
         } catch (e: Exception) {
-            PackImportResult.fail("lettura fallita: ${e.message}")
+            PackImportResult.fail("Read failed: ${e.message}")
         }
         if (result.ok) {
             gate.onExternalPackValid()
         } else {
-            gate.onExternalPackInvalid(result.error ?: "errore sconosciuto") // → BaseAction.NONE, mai download
+            gate.onExternalPackInvalid(result.error) // → BaseAction.NONE, never download
         }
         return result
     }
 
     /**
-     * Chiamata dal launcher all'avvio: scarica i file base SOLO se mancano
-     * davvero. Il fallimento di pack esterni non entra in questa decisione.
+     * Called by the launcher at startup: downloads base files ONLY if missing.
+     * External pack failures do not enter this decision.
      */
-    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): BaseAction =
+    fun maybeDownloadBaseFiles(baseFilesMissing: Boolean): PackGate.BaseAction =
         gate.checkBaseFiles(baseFilesMissing)
 
-    /** Hook per il resource manager di Starling (reload immediato del pack). */
+    /** Hook for the Starling resource manager (immediate pack reload). */
     var onPackImported: (File) -> Unit = {}
 
     private fun queryDisplayName(uri: Uri): String? {
@@ -108,7 +102,7 @@ class TexturePackImporter(private val activity: ComponentActivity) {
 }
 
 // ---------------------------------------------------------------------------
-// Esempio d'uso in un'Activity delle impostazioni di Starling:
+// Usage example in a Starling Settings activity:
 //
 // class SettingsActivity : ComponentActivity() {
 //     private lateinit var importer: TexturePackImporter

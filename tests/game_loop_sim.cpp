@@ -1,17 +1,17 @@
-// Simulazione del game loop Starling (host Linux, JVM reale in-process).
+// Starling game loop simulation (Linux host, real in-process JVM).
 //
-// Catena completa: mock Java produce nel ring (20 TPS) → libbridge_jni.so
-// (Rust) consuma e dispatcha nella LUT → sink Java conta le azioni.
-// Il "motore" è questo thread C++ che fa polling a 60 FPS con sleep_for.
+// Full chain: mock Java produces in the ring (20 TPS) → libbridge_jni.so
+// (Rust) consumes and dispatches in the LUT → Java sink counts the actions.
+// The "engine" is this C++ thread polling at 60 FPS with sleep_for.
 //
-// Verifiche:
-//   - zero perdite: azioni ricevute == pacchetti prodotti
-//   - zero scarti: dropped_bytes == 0
-//   - nessuna eccezione JNI pendente, local frame per frame (no ref leak)
-//   - 20 cicli attach/detach: RSS stabile (euristica anti-leak)
+// Checks:
+//   - zero losses: actions received == packets produced
+//   - zero drops: dropped_bytes == 0
+//   - no pending JNI exception, local frame per frame (no ref leak)
+//   - 20 attach/detach cycles: RSS stable (anti-leak heuristic)
 //
-// Build: vedi scripts/game-loop-sim.sh
-// Uso:   game_loop_sim <classesDir> <libbridge_jni.so> <mapping.bin> [frames]
+// Build: see scripts/game-loop-sim.sh
+// Usage:   game_loop_sim <classesDir> <libbridge_jni.so> <mapping.bin> [frames]
 
 #include <jni.h>
 
@@ -43,7 +43,7 @@ static jmethodID g_dropped = nullptr;
 
 static bool check_exc(const char* where) {
     if (g_env->ExceptionCheck()) {
-        std::fprintf(stderr, "FAIL: eccezione JNI in %s\n", where);
+        std::fprintf(stderr, "FAIL: JNI exception in %s\n", where);
         g_env->ExceptionDescribe();
         g_env->ExceptionClear();
         return false;
@@ -62,7 +62,7 @@ static long rss_kb() {
     return -1;
 }
 
-// Un "frame": poll con local frame (i local ref non si accumulano mai).
+// A "frame": poll with local frame (local refs never accumulate).
 static jint poll_frame(jlong handle) {
     g_env->PushLocalFrame(16);
     jint n = g_env->CallStaticIntMethod(g_transport, g_poll, handle);
@@ -79,7 +79,7 @@ struct RunStats {
     double p99_poll_ms = 0;
 };
 
-// Esegue una sessione: start → N frame a 60 FPS → stop → drain → contatori → detach.
+// Runs a session: start → N frames at 60 FPS → stop → drain → counters → detach.
 static bool run_session(int frames, RunStats& out) {
     jstring jMapping = g_env->NewStringUTF(g_mapping_path);
     jstring jSo = g_env->NewStringUTF(g_so_path);
@@ -88,7 +88,7 @@ static bool run_session(int frames, RunStats& out) {
     g_env->DeleteLocalRef(jSo);
     if (!check_exc("start") || handle == 0) return false;
 
-    // Warm-up del percorso JNI/JIT: le prime chiamate pagano inizializzazione.
+    // Warm-up of the JNI/JIT path: the first calls pay the initialization cost.
     for (int i = 0; i < 10; i++) {
         poll_frame(handle);
         if (!check_exc("warmup")) return false;
@@ -117,7 +117,7 @@ static bool run_session(int frames, RunStats& out) {
     g_env->CallStaticVoidMethod(g_mock, g_stopProducer);
     if (!check_exc("stopProducer")) return false;
 
-    // Drain finale: consuma tutto ciò che resta nel ring.
+    // Final drain: consumes whatever is left in the ring.
     for (int i = 0; i < 100; i++) {
         jint n = poll_frame(handle);
         if (!check_exc("drain")) return false;
@@ -137,7 +137,7 @@ static bool run_session(int frames, RunStats& out) {
 int main(int argc, char** argv) {
     if (argc < 4) {
         std::fprintf(stderr,
-                     "uso: %s <classesDir> <libbridge_jni.so> <mapping.bin> [frames]\n",
+                     "usage: %s <classesDir> <libbridge_jni.so> <mapping.bin> [frames]\n",
                      argv[0]);
         return 2;
     }
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
     g_mapping_path = argv[3];
     int frames = argc > 4 ? std::atoi(argv[4]) : 600; // 10 s a 60 FPS
 
-    // 1. JVM headless nello stesso processo (come farà Starling su Android).
+    // 1. JVM headless in the same process (as Starling will do on Android).
     std::string cp = std::string("-Djava.class.path=") + classes;
     JavaVMOption options[3];
     options[0].optionString = const_cast<char*>("-Djava.awt.headless=true");
@@ -177,58 +177,58 @@ int main(int argc, char** argv) {
     g_dropped = g_env->GetStaticMethodID(g_mock, "droppedBytes", "()J");
     if (!check_exc("GetMethodID")) return 1;
 
-    // 2. Sessione principale: 600 frame a 60 FPS.
+    // 2. Main session: 600 frames at 60 FPS.
     long rss_before = rss_kb();
     RunStats s;
     if (!run_session(frames, s)) return 1;
-    std::printf("sessione %d frame (60 FPS): prodotti=%ld ricevuti=%ld consumati=%ld byte "
-                "scartati=%ld poll p99=%.3f ms max=%.3f ms\n",
+    std::printf("session %d frame (60 FPS): produced=%ld received=%ld consumed=%ld bytes "
+                "dropped=%ld poll p99=%.3f ms max=%.3f ms\n",
                 frames, s.produced, s.received, s.consumed, s.dropped,
                 s.p99_poll_ms, s.max_poll_ms);
     if (s.received != s.produced) {
-        std::fprintf(stderr, "FAIL: perdite! ricevuti != prodotti\n");
+        std::fprintf(stderr, "FAIL: losses! received != produced\n");
         return 1;
     }
     if (s.consumed != s.produced * 2) {
-        std::fprintf(stderr, "FAIL: byte consumati != prodotti*2\n");
+        std::fprintf(stderr, "FAIL: consumed bytes != produced*2\n");
         return 1;
     }
     if (s.dropped != 0) {
-        std::fprintf(stderr, "FAIL: byte scartati (overflow ring)\n");
+        std::fprintf(stderr, "FAIL: bytes dropped (ring overflow)\n");
         return 1;
     }
-    // Budget: il costo del bridge è nell'ordine dei µs; gli outlier singoli sono
-    // scheduling dell'host. p99 deve stare sotto 5 ms, il max sotto un frame.
+    // Budget: the bridge cost is in the order of µs; the single outliers are
+    // host scheduling. p99 must stay under 5 ms, max under one frame.
     if (s.p99_poll_ms >= 5.0) {
-        std::fprintf(stderr, "FAIL: poll p99 oltre il budget di 5 ms\n");
+        std::fprintf(stderr, "FAIL: poll p99 over the 5 ms budget\n");
         return 1;
     }
     if (s.max_poll_ms >= 16.667) {
-        std::fprintf(stderr, "FAIL: poll max oltre un frame (16.6 ms)\n");
+        std::fprintf(stderr, "FAIL: poll max over a frame (16.6 ms)\n");
         return 1;
     }
-    std::printf("ok: zero perdite, zero scarti, poll sotto budget\n");
+    std::printf("ok: zero losses, zero drops, poll under budget\n");
 
-    // 3. Stress attach/detach: 20 cicli brevi, RSS deve stabilizzarsi.
+    // 3. attach/detach stress: 20 short cycles, RSS must stabilize.
     long rss_cycles_before = rss_kb();
     for (int c = 0; c < 20; c++) {
         RunStats cs;
         if (!run_session(30, cs)) return 1;
         if (cs.received != cs.produced || cs.dropped != 0) {
-            std::fprintf(stderr, "FAIL: ciclo %d con perdite/scarti\n", c);
+            std::fprintf(stderr, "FAIL: cycle %d with losses/drops\n", c);
             return 1;
         }
     }
     long rss_cycles_after = rss_kb();
     long growth_kb = rss_cycles_after - rss_cycles_before;
-    std::printf("20 cicli attach/detach: RSS %ld → %ld kB (crescita %ld kB)\n",
+    std::printf("20 attach/detach cycles: RSS %ld → %ld kB (growth %ld kB)\n",
                 rss_cycles_before, rss_cycles_after, growth_kb);
-    // Euristica: dopo il warmup, 20 cicli non devono aggiungere memoria significativa.
+    // Heuristic: after the warm-up, 20 cycles must not add significant memory.
     if (growth_kb > 32 * 1024) {
         std::fprintf(stderr, "FAIL: crescita RSS sospetta (leak?)\n");
         return 1;
     }
-    std::printf("ok: nessun crash, RSS stabile (RSS iniziale %ld kB)\n", rss_before);
+    std::printf("ok: no crash, RSS stable (initial RSS %ld kB)\n", rss_before);
 
     g_env->DeleteGlobalRef(g_mock);
     g_env->DeleteGlobalRef(g_transport);

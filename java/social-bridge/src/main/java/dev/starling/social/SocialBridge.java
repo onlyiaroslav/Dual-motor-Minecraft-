@@ -42,7 +42,7 @@ public final class SocialBridge implements AutoCloseable {
         }
         this.handle = nativeCreate(friendsFile);
         if (this.handle == 0) {
-            throw new IllegalStateException("impossibile aprire la lista amici");
+            throw new IllegalStateException("Unable to open the friends list");
         }
     }
 
@@ -85,7 +85,7 @@ public final class SocialBridge implements AutoCloseable {
         checkOpen();
         int actual = nativeStartAuthServer(handle, port);
         if (actual <= 0) {
-            throw new IllegalStateException("avvio server auth fallito");
+            throw new IllegalStateException("Auth server failed to start");
         }
         return actual;
     }
@@ -117,7 +117,7 @@ public final class SocialBridge implements AutoCloseable {
 
     private void checkOpen() {
         if (handle == 0) {
-            throw new IllegalStateException("SocialBridge già chiuso");
+            throw new IllegalStateException("SocialBridge already closed");
         }
     }
 

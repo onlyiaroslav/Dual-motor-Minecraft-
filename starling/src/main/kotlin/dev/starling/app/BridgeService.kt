@@ -9,38 +9,27 @@ import android.os.IBinder
 import java.io.File
 
 /**
- * Service Android che avvia la JVM headless IN-PROCESS (JNI_CreateJavaVM dal
- * layer C++ di starling_jvm_host) e carica mapping.bin.
+ * Service that starts the headless IN-PROCESS JVM (JNI_CreateJavaVM from the
+ * C++ layer of starling_jvm_host) and loads mapping.bin.
  *
  * Due runtime nello stesso processo:
  *  - ART: questo Service + il motore Starling;
  *  - JVM OpenJDK embedded: mod Java + classi dev.starling.bridge.* (dal jar).
- * Gli oggetti NON attraversano il confine: il sink è EngineSink, creato DENTRO
- * la JVM embedded da JvmBootstrap; inoltra le azioni al motore via callback C.
+ * The objects do NOT cross the boundary: the sink is EngineSink, created INSIDE
+ * the embedded JVM from JvmBootstrap; forwards the actions to the engine via C callback.
  *
- * Storage: tutto in getExternalFilesDir / filesDir / cacheDir → Scoped Storage
- * Android 15 OK, nessun permesso runtime.
+ * Storage: all in getExternalFilesDir / filesDir / cacheDir → Scoped Storage
+ * Android 15 OK, no runtime permission.
  */
 class BridgeService : Service() {
 
     companion object {
-        /** True se le librerie native sono state caricate senza errori. */
-        var nativeLibsLoaded: Boolean = false
-            private set
-
         init {
-            // Ordine: prima il bridge Rust, poi l'host C++ che lo usa.
-            // Se una libreria manca o fallisce, NON facciamo crashare il
-            // servizio: onStartCommand si limita a fermarsi.
-            // libjvm.so della JRE Android viene caricata con dlopen dall'host:
+            // Order: bridge Rust first, then the C++ host that uses it.
+            System.loadLibrary("bridge_jni")
+            System.loadLibrary("starling_jvm_host")
+            // libjvm.so of the Android JRE is loaded with dlopen by the host:
             // deve stare in nativeLibraryDir (jniLibs/arm64-v8a).
-            nativeLibsLoaded = try {
-                System.loadLibrary("bridge_jni")
-                System.loadLibrary("starling_jvm_host")
-                true
-            } catch (t: Throwable) {
-                false
-            }
         }
 
         @JvmStatic
@@ -54,63 +43,49 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!nativeLibsLoaded) {
+        startForeground(1, buildNotification())
+
+        val base = getExternalFilesDir(null)!!
+        val mods = File(base, "mods").apply { mkdirs() }
+        val lut = File(base, "lut").apply { mkdirs() }
+        val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
+
+        // Bridge classes for the embedded JVM (jar, NOT dex).
+        val bridgeJar = File(bridgeDir, "bridge-u8.jar")
+        assets.open("bridge-u8.jar").use { input ->
+            bridgeJar.outputStream().use { input.copyTo(it) }
+        }
+
+        // mapping.bin: generated OFFLINE (analysis tool). If absent, the
+        // packaged default is used; mods without mapping stay
+        // in the offline analysis queue (ModRegistry.scan), never analyzed here.
+        val mapping = File(lut, "mapping.bin")
+        if (!mapping.exists()) {
+            assets.open("mapping.bin").use { input ->
+                mapping.outputStream().use { input.copyTo(it) }
+            }
+        }
+
+        val jreLib = File(applicationInfo.nativeLibraryDir, "libjvm.so")
+        val ok = nativeStart(
+            jreLib.absolutePath,
+            bridgeJar.absolutePath,
+            mods.absolutePath,
+            lut.absolutePath,
+            mapping.absolutePath,
+            cacheDir.absolutePath
+        )
+        if (!ok) {
             stopSelf()
             return START_NOT_STICKY
         }
-
-        // Qualsiasi fallimento (asset mancante, runtime assente, JNI che lancia)
-        // deve fermare il servizio, non crashare l'app.
-        val started = runCatching {
-            startForeground(1, buildNotification())
-
-            val base = getExternalFilesDir(null) ?: filesDir
-            val mods = File(base, "mods").apply { mkdirs() }
-            val lut = File(base, "lut").apply { mkdirs() }
-            val bridgeDir = File(filesDir, "bridge").apply { mkdirs() }
-
-            // Classi del bridge per la JVM embedded (jar, NON dex).
-            val bridgeJar = File(bridgeDir, "bridge-u8.jar")
-            if (!bridgeJar.exists()) {
-                assets.open("bridge-u8.jar").use { input ->
-                    bridgeJar.outputStream().use { input.copyTo(it) }
-                }
-            }
-
-            // mapping.bin: generato OFFLINE (tool di analisi). Se assente, si usa
-            // il default impacchettato negli asset; le mod senza mapping restano
-            // in coda di analisi offline (ModRegistry.scan), mai analizzate qui.
-            val mapping = File(lut, "mapping.bin")
-            if (!mapping.exists()) {
-                assets.open("mapping.bin").use { input ->
-                    mapping.outputStream().use { input.copyTo(it) }
-                }
-            }
-
-            val jvmPath = JreInstaller.prepareEnv(this).getOrThrow()
-            nativeStart(
-                jvmPath,
-                bridgeJar.absolutePath,
-                mods.absolutePath,
-                lut.absolutePath,
-                mapping.absolutePath,
-                cacheDir.absolutePath
-            )
-        }.getOrDefault(false)
-
-        if (!started) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        // Il render loop del motore Rust chiama starling_jvm_poll_frame()
-        // (C ABI) una volta per frame: niente JNI dal lato Kotlin per frame.
+        // The render loop of the Rust engine calls starling_jvm_poll_frame()
+        // (C ABI) once per frame: no JNI from the Kotlin side per frame.
         return START_STICKY
     }
 
     override fun onDestroy() {
-        if (nativeLibsLoaded) {
-            runCatching { nativeStop() }
-        }
+        nativeStop()
         super.onDestroy()
     }
 
@@ -118,11 +93,11 @@ class BridgeService : Service() {
 
     private fun buildNotification(): Notification {
         val channel = NotificationChannel(
-            "bridge", "Motore mod Java", NotificationManager.IMPORTANCE_LOW
+            "bridge", "Java mod engine", NotificationManager.IMPORTANCE_LOW
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         return Notification.Builder(this, "bridge")
-            .setContentTitle("Doge Client — JVM headless attiva")
+            .setContentTitle("Starling — headless JVM active")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .build()
     }
