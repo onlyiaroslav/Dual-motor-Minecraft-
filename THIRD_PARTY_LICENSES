@@ -1,0 +1,115 @@
+# THIRD_PARTY_LICENSES
+
+Doge Client (`dev.starling.app`) è software proprietario (vedi `LICENSE`).
+Questo file elenca i componenti di terze parti incorporati nel repository e
+le loro licenze. Il codice Rust adattato da Starling/Horizon è MIT: questa
+nota soddisfa l'obbligo di attribution della licenza MIT.
+
+---
+
+## 1. Starling (fork Android di Horizon) — MIT
+
+- Progetto: **Starling**, formerly Horizon Android — Android port of Horizon
+  (Rust Minecraft client).
+- Repository: https://github.com/starling-client/starling
+- Branch `starling`, commit `0e5bb58a44efa8e38ee067172a11e3c573829976`
+  (shallow clone di riferimento: `/tmp/starling-upstream`).
+- Copyright (c) 2026 Ludovic Marie and the Horizon contributors.
+- Starling (Android port) by JuanLuci (@JuanLuci) and Vasysik (@Vasysik).
+- Licenza: MIT (testo integrale sotto).
+
+Componenti adattati (NON copiati integralmente: solo le parti mancanti di
+rendering e game loop, riscritte intorno all'architettura esistente del repo):
+
+| File locale | Origine upstream |
+|---|---|
+| `crates/starling-render/src/camera.rs` | `crates/horizon-client-render/src/camera.rs` (trigonometria JOML, `rotation_yxz`, `view_matrix`, `perspective`) |
+| `crates/starling-render/src/touch.rs` | `crates/horizon-client-render/src/touch.rs` + `touch/aim.rs` (ruoli delle dita, `DRAG_SLOP`, `HOLD_DELAY`, `camera_delta`, `screen_direction`) |
+| `crates/starling-render/src/surface.rs` | `crates/horizon-client-render/src/gfx/surface_setup.rs` + `gfx.rs` (`surface_format`, present mode Fifo su Android, clamp al device) |
+| `crates/starling-render/src/renderer.rs` | struttura pipeline da `crates/horizon-client-render/src/gfx.rs` (depth, cull, uniforms per frame) |
+
+Il resto del crate `starling-render` (game loop, mondo demo, JNI, connessione
+al bridge) è originale di questo repository.
+
+### Testo della licenza MIT (Starling/Horizon)
+
+```
+MIT License
+
+Copyright (c) 2026 Ludovic Marie and the Horizon contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
+## 2. JOML (Java OpenGL Math Library) — MIT
+
+La matematica della camera in `crates/starling-render/src/camera.rs`
+(`sin`, `cos_from_sin`, `Quat::rotation_yxz`, `rotation_matrix`,
+`perspective`) è adattata da JOML 1.10.9 (`Matrix4f`, `Quaternionf`)
+**tramite** il codice Rust di Starling/Horizon che la reimplementa
+operation-by-operation.
+
+- Repository: https://github.com/JOML-CI/JOML
+- Copyright (c) 2015-2026 Richard Greenlees
+- Licenza: MIT (testo integrale sotto).
+
+```
+MIT License
+
+Copyright (c) 2015-2026 Richard Greenlees
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
+## 3. Dipendenze Cargo (non incorporate nel sorgente)
+
+Le librerie usate via Cargo restano sotto le rispettive licenze (nessun
+codice sorgente copiato in questo repository):
+
+- `wgpu` / `wgpu-types` / `wgpu-core` / `wgpu-hal` / `naga` — MIT OR Apache-2.0
+  (gfx-rs/wgpu). Pin `=30.0.1`, la stessa versione di Starling upstream.
+- `jni` — MIT (jni-rs).
+- `pollster` — MIT OR Apache-2.0.
+- `bytemuck` — Zlib OR Apache-2.0 OR MIT.
+- `log` — MIT OR Apache-2.0.
+
+L'APK non contiene codice, asset o dati di Minecraft: Minecraft è un
+marchio di Mojang Synergies AB; il codice e gli asset di Minecraft appartengono
+a Mojang/Microsoft (Minecraft EULA). Starling/Horizon non contengono codice
+Minecraft e questo repository nemmeno.

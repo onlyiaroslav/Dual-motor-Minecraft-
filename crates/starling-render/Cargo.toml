@@ -1,0 +1,26 @@
+[package]
+name = "starling-render"
+version = "0.1.0"
+edition = "2021"
+description = "Renderer voxel 3D + game loop per Starling Android (wgpu/Vulkan su ANativeWindow), adattato da starling-client/starling (MIT)"
+license-file = "../../LICENSE"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+starling-features = { path = "../starling-features" }
+bridge-u8 = { path = "../bridge-u8" }
+bytemuck = { version = "1", features = ["derive"] }
+
+# Il layer wgpu/Vulkan e le entry point JNI esistono solo su Android:
+# su host restano compilabili (e testabili) camera, touch, game e bridge.
+[target.'cfg(target_os = "android")'.dependencies]
+# wgpu pinned alla versione esatta di Starling upstream (30.0.1, Cargo.lock):
+# la 30.0.2 ha cambiato API (present/queue, CurrentSurfaceTexture…).
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "wgsl"] }
+jni = { version = "0.21", default-features = false }
+log = "0.4"
+android_logger = "0.14"
+pollster = "0.4"

@@ -4,7 +4,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
@@ -35,7 +36,6 @@ private val DogeDarkColorScheme = darkColorScheme(
 // Tipografia moderna e arrotondata
 // ---------------------------------------------------------------------------
 private val DogeTypography = Typography(
-    fontFamily = FontFamily.Default,
     displayLarge = TextStyle(
         fontSize = 34.sp,
         fontWeight = FontWeight.ExtraBold,

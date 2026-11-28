@@ -6,4 +6,9 @@
     <string name="nav_settings">Impostazioni</string>
     <string name="ready_to_play">Pronto per giocare</string>
     <string name="avatar_description">Avatar utente</string>
+    <!-- Gioco (GameActivity) -->
+    <string name="game_xray">X-Ray</string>
+    <string name="game_jump">Salta</string>
+    <string name="game_exit">Esci</string>
+    <string name="game_render_error">Renderer 3D non disponibile su questo dispositivo</string>
 </resources>

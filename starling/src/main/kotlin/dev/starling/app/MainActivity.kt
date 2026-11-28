@@ -1,5 +1,6 @@
 package dev.starling.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,9 +9,11 @@ import java.io.File
 /**
  * Activity principale del launcher Doge Client.
  *
- * Il pulsante "Play" chiama [nativeStartGame], che avvia la JVM headless
- * in-process (stessa logica di BridgeService, condivisa via startJvmEmbedded
- * in starling_jvm_host.cpp). Nessun file Rust/JNI/HTTP è stato modificato.
+ * Il pulsante "Play" apre [GameActivity]: SurfaceView + renderer voxel Rust
+ * (wgpu/Vulkan) con game loop a 60 FPS e tick 20 TPS. La JVM headless embedded
+ * viene avviata là ([nativeStartGame], stessa logica di BridgeService, condivisa
+ * via startJvmEmbedded in starling_jvm_host.cpp); senza JRE installata il gioco
+ * 3D gira lo stesso e il poll del bridge ritorna 0.
  *
  * All'avvio, se l'utente ha abilitato l'auto-start nelle impostazioni, lancia
  * automaticamente il server AI locale (llama-server) su 127.0.0.1:8080
@@ -33,8 +36,14 @@ class MainActivity : ComponentActivity() {
         /**
          * Avvia il gioco: dlopen libjvm, JNI_CreateJavaVM, JvmBootstrap.start,
          * ring buffer, tick 20 TPS. Stessa logica di BridgeService.nativeStart.
-         * Restituisce true se l'avvio riesce.
+         * Chiamata dal render thread di GameActivity. Restituisce true se
+         * l'avvio riesce.
+         *
+         * @JvmStatic: il simbolo JNI è Java_dev_starling_app_MainActivity_
+         * nativeStartGame (come esportato da starling_jvm_host.cpp), non
+         * sulla classe Companion.
          */
+        @JvmStatic
         external fun nativeStartGame(
             jreLib: String,
             classpath: String,
@@ -66,35 +75,34 @@ class MainActivity : ComponentActivity() {
         val bridgeDir = File(ctx.filesDir, "bridge").apply { mkdirs() }
 
         // Classi del bridge per la JVM embedded (jar, NON dex).
+        // Se l'asset non è presente, non blocchiamo l'avvio della UI: il
+        // pulsante Play resterà senza effetto finché il jar non viene aggiunto.
         val bridgeJar = File(bridgeDir, "bridge-u8.jar")
         if (!bridgeJar.exists()) {
-            ctx.assets.open("bridge-u8.jar").use { input ->
-                bridgeJar.outputStream().use { input.copyTo(it) }
+            runCatching {
+                ctx.assets.open("bridge-u8.jar").use { input ->
+                    bridgeJar.outputStream().use { input.copyTo(it) }
+                }
             }
         }
 
         // mapping.bin: default offline, se assente si usa quello impacchettato.
         val mapping = File(lut, "mapping.bin")
         if (!mapping.exists()) {
-            ctx.assets.open("mapping.bin").use { input ->
-                mapping.outputStream().use { input.copyTo(it) }
+            runCatching {
+                ctx.assets.open("mapping.bin").use { input ->
+                    mapping.outputStream().use { input.copyTo(it) }
+                }
             }
         }
-
-        val jreLib = File(ctx.applicationInfo.nativeLibraryDir, "libjvm.so")
 
         setContent {
             DogeTheme {
                 MainScreen(
                     onStartGame = {
-                        nativeStartGame(
-                            jreLib.absolutePath,
-                            bridgeJar.absolutePath,
-                            mods.absolutePath,
-                            lut.absolutePath,
-                            mapping.absolutePath,
-                            ctx.cacheDir.absolutePath
-                        )
+                        // Play → GameActivity: SurfaceView + renderer Rust.
+                        // La JVM embedded parte sul render thread di gioco.
+                        startActivity(Intent(ctx, GameActivity::class.java))
                     }
                 )
             }

@@ -1,20 +1,22 @@
-// Starling — modulo di esempio per l'integrazione del bridge (Android 15).
-// Adatta i percorsi al layout reale del repo Starling.
+// Starling — modulo Android del launcher Doge Client.
 //
 // Pipeline APK:
-//   1. cargoNdkBuild (Exec): cargo-ndk compila libbridge_jni.so → jniLibs/arm64-v8a
-//   2. externalNativeBuild (CMake): compila starling_jvm_host.cpp → libstarling_jvm_host.so
-//   3. packaging: tutte le .so (bridge_jni, starling_jvm_host, libjvm della JRE)
-//      finiscono nell'APK, non compresse (useLegacyPackaging=false, pagine 16 KB)
+//   1. cargoNdkBuildBridge / cargoNdkBuildModConverter / cargoNdkBuildRender
+//      (Exec): compilano le librerie Rust in starling/src/main/jniLibs/arm64-v8a/
+//   2. externalNativeBuild (CMake): compila starling_jvm_host.cpp
+//   3. packaging: tutte le .so finiscono nell'APK, non compresse
+//      (useLegacyPackaging=false, pagine 16 KB)
 
 plugins {
-    id("com.android.application") version "8.7.0"
-    kotlin("android") version "2.0.21"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "dev.starling.app"
     compileSdk = 35
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "dev.starling.app"
@@ -34,6 +36,10 @@ android {
         }
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = false   // .so non compresse: mmap diretto, 16 KB OK
@@ -42,13 +48,15 @@ android {
 
     sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
     // I file Kotlin esistenti (BridgeService, FriendsScreen, SettingsScreen,
-    // TexturePackImporter) sono ora in src/main/kotlin/dev/starling/app/
+    // TexturePackImporter) sono in src/main/kotlin/dev/starling/app/
     // (package dev.starling.app): Gradle li trova di default.
-    // I bridge Java esistenti (invariati) servono a FriendsActivity e
-    // SettingsActivity: li includiamo senza toccarli.
+    // I bridge Java esistenti (invariati) servono a FriendsActivity,
+    // SettingsActivity e TexturePackImporter: li includiamo senza toccarli.
+    // NB: i percorsi sono relativi a questa cartella (starling/), quindi
+    // "../java/..." punta alla root del repository.
     sourceSets["main"].java.srcDirs(
-        file("../../java/social-bridge/src/main/java"),
-        file("../../java/ai-converter/src/main/java"),
+        file("../java/social-bridge/src/main/java"),
+        file("../java/ai-converter/src/main/java"),
     )
 
     compileOptions {
@@ -56,7 +64,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    // Il compilatore Compose è gestito dal BOM (compatibile con Kotlin 2.0.21).
 }
 
 // --- Build Rust prima della build nativa ----------------------------------
@@ -64,12 +71,13 @@ android {
 
 // Task 1: libbridge_jni.so (bridge a 8 bit + JNI, usato da starling_jvm_host).
 val cargoNdkBuildBridge by tasks.registering(Exec::class) {
-    workingDir = projectDir
+    // I task girano dalla root del repository: lì c'è Cargo.toml.
+    workingDir = rootProject.projectDir
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
         "-p", "33",
-        "-o", "src/main/jniLibs",
+        "-o", "starling/src/main/jniLibs",
         "build", "--release", "-p", "bridge-jni"
     )
 }
@@ -77,18 +85,33 @@ val cargoNdkBuildBridge by tasks.registering(Exec::class) {
 // Task 2: libmod_converter.so (convertitore mod offline con AI locale, Fase 7).
 // Usa la feature "jni" per esportare i simboli JNI verso AiConverterBridge.java.
 val cargoNdkBuildModConverter by tasks.registering(Exec::class) {
-    workingDir = projectDir
+    workingDir = rootProject.projectDir
     commandLine(
         "cargo", "ndk",
         "-t", "arm64-v8a",
         "-p", "33",
-        "-o", "src/main/jniLibs",
+        "-o", "starling/src/main/jniLibs",
         "build", "--release", "-p", "mod-converter", "--features", "jni"
     )
 }
 
+// Task 3: libstarling_render.so (renderer voxel wgpu/Vulkan + game loop,
+// crate starling-render). I simboli C dell'host JVM (starling_jvm_poll_frame)
+// sono risolti a runtime da libstarling_jvm_host.so, caricata prima in
+// GameActivity: nessun link formale necessario qui.
+val cargoNdkBuildRender by tasks.registering(Exec::class) {
+    workingDir = rootProject.projectDir
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "-p", "33",
+        "-o", "starling/src/main/jniLibs",
+        "build", "--release", "-p", "starling-render"
+    )
+}
+
 tasks.named("preBuild") {
-    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter)
+    dependsOn(cargoNdkBuildBridge, cargoNdkBuildModConverter, cargoNdkBuildRender)
 }
 
 // --- Dipendenze Jetpack Compose (UI Doge Client) ---------------------------

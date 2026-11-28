@@ -5,12 +5,14 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -18,8 +20,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v4
+        with:
+          packages: |
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;27.0.12077973
+            cmake;3.22.1
 
       - name: Set up Rust and Android target
         uses: dtolnay/rust-toolchain@stable
@@ -27,18 +35,12 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+        run: cargo install cargo-ndk --locked
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          wrapper: true
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+          gradle-version: "8.9"
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -46,17 +48,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Debug APK
-        run: ./gradlew :starling:assembleDebug
+        run: gradle :starling:assembleDebug --stacktrace --no-daemon
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.0.12077973
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: doge-client-debug-apk
-          path: starling/build/outputs/apk/debug/starling-debug.apk
+          path: starling/build/outputs/apk/debug/*.apk
           retention-days: 30

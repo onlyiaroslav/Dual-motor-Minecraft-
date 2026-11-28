@@ -24,6 +24,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Gioco: SurfaceView + renderer voxel Rust (wgpu/Vulkan), landscape.
+             configChanges: il resize della superficie è gestito da nativeResize,
+             senza ricreare l'Activity. -->
+        <activity
+            android:name=".GameActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
         <!-- Service esistente: avvio JVM headless + bridge Rust (invariato). -->
         <service
             android:name=".BridgeService"

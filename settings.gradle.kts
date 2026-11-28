@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "doge-client"
-include("starling")
+rootProject.name = "DogeClient"
+include(":starling")
